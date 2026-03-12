@@ -1,10 +1,13 @@
-linters-settings:
-  errcheck:
-    exclude-functions:
-      # Write errors to stdout/stderr are not actionable in a CLI.
-      - fmt.Fprint
-      - fmt.Fprintln
-      - fmt.Fprintf
-      # JSON encode/decode errors in test HTTP handlers are not actionable.
-      - (*encoding/json.Encoder).Encode
-      - (*encoding/json.Decoder).Decode
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      exclude-functions:
+        # Write errors to stdout/stderr are not actionable in a CLI.
+        - fmt.Fprint
+        - fmt.Fprintln
+        - fmt.Fprintf
+        # JSON encode/decode errors in test HTTP handlers are not actionable.
+        - (*encoding/json.Encoder).Encode
+        - (*encoding/json.Decoder).Decode
