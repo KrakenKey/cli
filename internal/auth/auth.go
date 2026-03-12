@@ -2,11 +2,8 @@
 package auth
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/krakenkey/cli/internal/api"
@@ -14,30 +11,16 @@ import (
 	"github.com/krakenkey/cli/internal/output"
 )
 
-// RunLogin sets the API key, validates it against the API, and saves it to the config file.
-// If apiKey is empty the user is prompted interactively.
-func RunLogin(ctx context.Context, client *api.Client, printer *output.Printer, cfg *config.Config, apiKey string) error {
-	if apiKey == "" {
-		fmt.Fprint(os.Stderr, "Enter API key: ")
-		scanner := bufio.NewScanner(os.Stdin)
-		if scanner.Scan() {
-			apiKey = strings.TrimSpace(scanner.Text())
-		}
-		if apiKey == "" {
-			return &api.ErrConfig{Message: "API key cannot be empty"}
-		}
-	}
-
-	// Validate the key by fetching the profile.
+// RunLogin validates apiKey against the API and saves it to the config file.
+// The client must be configured with apiKey already.
+func RunLogin(ctx context.Context, client *api.Client, printer *output.Printer, apiKey string) error {
 	profile, err := client.GetProfile(ctx)
 	if err != nil {
 		return err
 	}
-
 	if err := config.Save("", apiKey, ""); err != nil {
 		return &api.ErrConfig{Message: fmt.Sprintf("save config: %s", err)}
 	}
-
 	printer.Success("Logged in as %s (%s)", profile.DisplayName, profile.Email)
 	return nil
 }

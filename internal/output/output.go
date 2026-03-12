@@ -57,7 +57,7 @@ func (p *Printer) Success(msg string, args ...any) {
 	if p.IsJSON() {
 		return
 	}
-	fmt.Fprintf(p.w, p.color(colorGreen, "✓")+" "+fmt.Sprintf(msg, args...)+"\n")
+	fmt.Fprint(p.w, p.color(colorGreen, "✓")+" "+fmt.Sprintf(msg, args...)+"\n")
 }
 
 // Error prints an error message to stderr. In JSON mode it emits {"error":"..."}.
@@ -68,7 +68,7 @@ func (p *Printer) Error(msg string, args ...any) {
 		fmt.Fprintln(p.errW, string(data))
 		return
 	}
-	fmt.Fprintf(p.errW, p.color(colorRed, "Error:")+" "+text+"\n")
+	fmt.Fprint(p.errW, p.color(colorRed, "Error:")+" "+text+"\n")
 }
 
 // Info prints an informational message prefixed with • (text mode only).
@@ -76,7 +76,7 @@ func (p *Printer) Info(msg string, args ...any) {
 	if p.IsJSON() {
 		return
 	}
-	fmt.Fprintf(p.w, p.color(colorBlue, "•")+" "+fmt.Sprintf(msg, args...)+"\n")
+	fmt.Fprint(p.w, p.color(colorBlue, "•")+" "+fmt.Sprintf(msg, args...)+"\n")
 }
 
 // Println prints a plain line (text mode only).
@@ -84,7 +84,7 @@ func (p *Printer) Println(msg string, args ...any) {
 	if p.IsJSON() {
 		return
 	}
-	fmt.Fprintf(p.w, fmt.Sprintf(msg, args...)+"\n")
+	fmt.Fprint(p.w, fmt.Sprintf(msg, args...)+"\n")
 }
 
 // Printf prints a formatted string (text mode only).
@@ -126,7 +126,7 @@ func (p *Printer) Table(headers []string, rows [][]string) {
 	// Header row
 	fmt.Fprintf(p.w, "  ")
 	for i, h := range headers {
-		fmt.Fprintf(p.w, p.color(colorBold, fmt.Sprintf("%-*s", widths[i], h)))
+		fmt.Fprint(p.w, p.color(colorBold, fmt.Sprintf("%-*s", widths[i], h)))
 		if i < len(headers)-1 {
 			fmt.Fprintf(p.w, "   ")
 		}
@@ -136,7 +136,7 @@ func (p *Printer) Table(headers []string, rows [][]string) {
 	// Separator
 	fmt.Fprintf(p.w, "  ")
 	for i, w := range widths {
-		fmt.Fprintf(p.w, strings.Repeat("─", w))
+		fmt.Fprint(p.w, strings.Repeat("─", w))
 		if i < len(widths)-1 {
 			fmt.Fprintf(p.w, "   ")
 		}
