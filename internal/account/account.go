@@ -45,6 +45,8 @@ func RunPlan(ctx context.Context, client *api.Client, printer *output.Printer) e
 	if sub.CancelAtPeriodEnd {
 		printer.Info("Subscription is set to cancel at end of current period")
 	}
-	printer.Println("Subscribed:          %s", sub.CreatedAt.Format(time.RFC3339))
+	if !sub.CreatedAt.IsZero() {
+		printer.Println("Subscribed:          %s", sub.CreatedAt.Format(time.RFC3339))
+	}
 	return nil
 }

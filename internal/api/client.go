@@ -138,16 +138,16 @@ func (c *Client) DeleteDomain(ctx context.Context, id string) error {
 // Certificate methods
 
 func (c *Client) CreateCert(ctx context.Context, csrPem string) (*CertResponse, error) {
-	body := map[string]string{"rawCsr": csrPem}
+	body := map[string]string{"csrPem": csrPem}
 	var cr CertResponse
-	if err := c.do(ctx, http.MethodPost, "/certs", body, &cr); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/certs/tls", body, &cr); err != nil {
 		return nil, err
 	}
 	return &cr, nil
 }
 
 func (c *Client) ListCerts(ctx context.Context, status string) ([]TlsCert, error) {
-	path := "/certs"
+	path := "/certs/tls"
 	if status != "" {
 		path += "?status=" + url.QueryEscape(status)
 	}
@@ -160,7 +160,7 @@ func (c *Client) ListCerts(ctx context.Context, status string) ([]TlsCert, error
 
 func (c *Client) GetCert(ctx context.Context, id int) (*TlsCert, error) {
 	var cert TlsCert
-	if err := c.do(ctx, http.MethodGet, "/certs/"+strconv.Itoa(id), nil, &cert); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/certs/tls/"+strconv.Itoa(id), nil, &cert); err != nil {
 		return nil, err
 	}
 	return &cert, nil
@@ -168,7 +168,7 @@ func (c *Client) GetCert(ctx context.Context, id int) (*TlsCert, error) {
 
 func (c *Client) GetCertDetails(ctx context.Context, id int) (*TlsCertDetails, error) {
 	var details TlsCertDetails
-	if err := c.do(ctx, http.MethodGet, "/certs/"+strconv.Itoa(id)+"/details", nil, &details); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/certs/tls/"+strconv.Itoa(id)+"/details", nil, &details); err != nil {
 		return nil, err
 	}
 	return &details, nil
@@ -177,7 +177,7 @@ func (c *Client) GetCertDetails(ctx context.Context, id int) (*TlsCertDetails, e
 func (c *Client) UpdateCert(ctx context.Context, id int, autoRenew *bool) (*TlsCert, error) {
 	body := map[string]any{"autoRenew": autoRenew}
 	var cert TlsCert
-	if err := c.do(ctx, http.MethodPatch, "/certs/"+strconv.Itoa(id), body, &cert); err != nil {
+	if err := c.do(ctx, http.MethodPatch, "/certs/tls/"+strconv.Itoa(id), body, &cert); err != nil {
 		return nil, err
 	}
 	return &cert, nil
@@ -185,7 +185,7 @@ func (c *Client) UpdateCert(ctx context.Context, id int, autoRenew *bool) (*TlsC
 
 func (c *Client) RenewCert(ctx context.Context, id int) (*CertResponse, error) {
 	var cr CertResponse
-	if err := c.do(ctx, http.MethodPost, "/certs/"+strconv.Itoa(id)+"/renew", nil, &cr); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/certs/tls/"+strconv.Itoa(id)+"/renew", nil, &cr); err != nil {
 		return nil, err
 	}
 	return &cr, nil
@@ -197,7 +197,7 @@ func (c *Client) RevokeCert(ctx context.Context, id int, reason *int) (*CertResp
 		body = map[string]int{"reason": *reason}
 	}
 	var cr CertResponse
-	if err := c.do(ctx, http.MethodPost, "/certs/"+strconv.Itoa(id)+"/revoke", body, &cr); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/certs/tls/"+strconv.Itoa(id)+"/revoke", body, &cr); err != nil {
 		return nil, err
 	}
 	return &cr, nil
@@ -205,21 +205,21 @@ func (c *Client) RevokeCert(ctx context.Context, id int, reason *int) (*CertResp
 
 func (c *Client) RetryCert(ctx context.Context, id int) (*CertResponse, error) {
 	var cr CertResponse
-	if err := c.do(ctx, http.MethodPost, "/certs/"+strconv.Itoa(id)+"/retry", nil, &cr); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/certs/tls/"+strconv.Itoa(id)+"/retry", nil, &cr); err != nil {
 		return nil, err
 	}
 	return &cr, nil
 }
 
 func (c *Client) DeleteCert(ctx context.Context, id int) error {
-	return c.do(ctx, http.MethodDelete, "/certs/"+strconv.Itoa(id), nil, nil)
+	return c.do(ctx, http.MethodDelete, "/certs/tls/"+strconv.Itoa(id), nil, nil)
 }
 
 // Auth methods
 
 func (c *Client) GetProfile(ctx context.Context) (*UserProfile, error) {
 	var p UserProfile
-	if err := c.do(ctx, http.MethodGet, "/auth/me", nil, &p); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/auth/profile", nil, &p); err != nil {
 		return nil, err
 	}
 	return &p, nil

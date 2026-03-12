@@ -1,0 +1,18 @@
+# Compiled binaries
+krakenkey
+krakenkey-*
+
+# Go build artifacts
+/dist/
+
+# Test output / local dev artifacts
+*.key
+*.csr
+*.crt
+*.pem
+
+# Go test cache
+/tmp/
+
+# OS
+.DS_Store

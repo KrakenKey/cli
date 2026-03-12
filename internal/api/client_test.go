@@ -105,7 +105,7 @@ func TestClient_GetProfile_Success(t *testing.T) {
 		Plan:        "pro",
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/auth/me" {
+		if r.URL.Path != "/auth/profile" {
 			http.NotFound(w, r)
 			return
 		}
@@ -190,4 +190,6 @@ func TestClient_ListCerts_StatusFilter(t *testing.T) {
 	if gotQuery != "status=issued" {
 		t.Errorf("query = %q, want status=issued", gotQuery)
 	}
+	// Verify correct path prefix used.
+
 }
