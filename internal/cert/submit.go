@@ -74,8 +74,3 @@ func RunSubmit(ctx context.Context, client *api.Client, printer *output.Printer,
 	return nil
 }
 
-// defaultPollInterval is used when no interval is specified.
-const defaultPollInterval = 15 * time.Second
-
-// defaultPollTimeout is used when no timeout is specified.
-const defaultPollTimeout = 10 * time.Minute
