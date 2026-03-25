@@ -249,6 +249,64 @@ func (c *Client) DeleteAPIKey(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodDelete, "/auth/api-keys/"+id, nil, nil)
 }
 
+// Endpoint methods
+
+func (c *Client) CreateEndpoint(ctx context.Context, host string, port int, sni, label *string) (*Endpoint, error) {
+	body := map[string]any{"host": host, "port": port}
+	if sni != nil {
+		body["sni"] = *sni
+	}
+	if label != nil {
+		body["label"] = *label
+	}
+	var ep Endpoint
+	if err := c.do(ctx, http.MethodPost, "/endpoints", body, &ep); err != nil {
+		return nil, err
+	}
+	return &ep, nil
+}
+
+func (c *Client) ListEndpoints(ctx context.Context) ([]Endpoint, error) {
+	var endpoints []Endpoint
+	if err := c.do(ctx, http.MethodGet, "/endpoints", nil, &endpoints); err != nil {
+		return nil, err
+	}
+	return endpoints, nil
+}
+
+func (c *Client) GetEndpoint(ctx context.Context, id string) (*Endpoint, error) {
+	var ep Endpoint
+	if err := c.do(ctx, http.MethodGet, "/endpoints/"+id, nil, &ep); err != nil {
+		return nil, err
+	}
+	return &ep, nil
+}
+
+func (c *Client) UpdateEndpoint(ctx context.Context, id string, updates map[string]any) (*Endpoint, error) {
+	var ep Endpoint
+	if err := c.do(ctx, http.MethodPatch, "/endpoints/"+id, updates, &ep); err != nil {
+		return nil, err
+	}
+	return &ep, nil
+}
+
+func (c *Client) DeleteEndpoint(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodDelete, "/endpoints/"+id, nil, nil)
+}
+
+func (c *Client) AddEndpointRegion(ctx context.Context, id, region string) (*EndpointHostedRegion, error) {
+	body := map[string]string{"region": region}
+	var ehr EndpointHostedRegion
+	if err := c.do(ctx, http.MethodPost, "/endpoints/"+id+"/regions", body, &ehr); err != nil {
+		return nil, err
+	}
+	return &ehr, nil
+}
+
+func (c *Client) RemoveEndpointRegion(ctx context.Context, id, region string) error {
+	return c.do(ctx, http.MethodDelete, "/endpoints/"+id+"/regions/"+region, nil, nil)
+}
+
 // Billing methods
 
 func (c *Client) GetSubscription(ctx context.Context) (*Subscription, error) {

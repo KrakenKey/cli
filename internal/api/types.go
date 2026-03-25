@@ -131,6 +131,28 @@ type Subscription struct {
 	CreatedAt         time.Time  `json:"createdAt"`
 }
 
+// Endpoint represents a monitored endpoint.
+type Endpoint struct {
+	ID            string                `json:"id"`
+	UserID        string                `json:"userId"`
+	Host          string                `json:"host"`
+	Port          int                   `json:"port"`
+	SNI           *string               `json:"sni"`
+	Label         *string               `json:"label"`
+	IsActive      bool                  `json:"isActive"`
+	HostedRegions []EndpointHostedRegion `json:"hostedRegions"`
+	CreatedAt     time.Time             `json:"createdAt"`
+	UpdatedAt     time.Time             `json:"updatedAt"`
+}
+
+// EndpointHostedRegion links an endpoint to a hosted probe region.
+type EndpointHostedRegion struct {
+	ID         string    `json:"id"`
+	EndpointID string    `json:"endpointId"`
+	Region     string    `json:"region"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
 // APIError is the error shape returned by the KrakenKey API.
 type APIError struct {
 	StatusCode int    `json:"statusCode"`

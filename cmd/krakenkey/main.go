@@ -18,6 +18,7 @@ import (
 	"github.com/krakenkey/cli/internal/cert"
 	"github.com/krakenkey/cli/internal/config"
 	"github.com/krakenkey/cli/internal/domain"
+	"github.com/krakenkey/cli/internal/endpoint"
 	"github.com/krakenkey/cli/internal/output"
 )
 
@@ -113,6 +114,8 @@ func run() int {
 		cmdErr = runAccount(ctx, client, printer, subArgs)
 	case "cert":
 		cmdErr = runCert(ctx, client, printer, cfg, subArgs)
+	case "endpoint":
+		cmdErr = runEndpoint(ctx, client, printer, subArgs)
 	default:
 		fmt.Fprintf(os.Stderr, "error: unknown command %q — run 'krakenkey help'\n", cmd)
 		return 1
@@ -636,6 +639,133 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 	}
 }
 
+// ── endpoint ──────────────────────────────────────────────────────────────────
+
+func runEndpoint(ctx context.Context, client *api.Client, printer *output.Printer, args []string) error {
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
+		fmt.Print(endpointUsage)
+		return nil
+	}
+
+	sub := args[0]
+	subArgs := args[1:]
+
+	switch sub {
+	case "add":
+		fs := flag.NewFlagSet("endpoint add", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		var (
+			port     int
+			sniFlag  string
+			labelFlag string
+		)
+		fs.IntVar(&port, "port", 443, "Port to monitor (default: 443)")
+		fs.StringVar(&sniFlag, "sni", "", "SNI override (optional)")
+		fs.StringVar(&labelFlag, "label", "", "Label (optional)")
+		fs.Usage = func() {
+			fmt.Fprint(os.Stderr, "Usage: krakenkey endpoint add <host> [--port 443] [--sni host] [--label name]\n")
+		}
+		if err := fs.Parse(subArgs); err != nil {
+			return err
+		}
+		if fs.NArg() == 0 {
+			return &api.ErrConfig{Message: "hostname is required"}
+		}
+		var sni, label *string
+		if sniFlag != "" {
+			sni = &sniFlag
+		}
+		if labelFlag != "" {
+			label = &labelFlag
+		}
+		return endpoint.RunAdd(ctx, client, printer, fs.Arg(0), port, sni, label)
+
+	case "list":
+		return endpoint.RunList(ctx, client, printer)
+
+	case "show":
+		fs := flag.NewFlagSet("endpoint show", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		fs.Usage = func() { fmt.Fprint(os.Stderr, "Usage: krakenkey endpoint show <id>\n") }
+		if err := fs.Parse(subArgs); err != nil {
+			return err
+		}
+		if fs.NArg() == 0 {
+			return &api.ErrConfig{Message: "endpoint ID is required"}
+		}
+		return endpoint.RunShow(ctx, client, printer, fs.Arg(0))
+
+	case "enable":
+		fs := flag.NewFlagSet("endpoint enable", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		fs.Usage = func() { fmt.Fprint(os.Stderr, "Usage: krakenkey endpoint enable <id>\n") }
+		if err := fs.Parse(subArgs); err != nil {
+			return err
+		}
+		if fs.NArg() == 0 {
+			return &api.ErrConfig{Message: "endpoint ID is required"}
+		}
+		return endpoint.RunEnable(ctx, client, printer, fs.Arg(0))
+
+	case "disable":
+		fs := flag.NewFlagSet("endpoint disable", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		fs.Usage = func() { fmt.Fprint(os.Stderr, "Usage: krakenkey endpoint disable <id>\n") }
+		if err := fs.Parse(subArgs); err != nil {
+			return err
+		}
+		if fs.NArg() == 0 {
+			return &api.ErrConfig{Message: "endpoint ID is required"}
+		}
+		return endpoint.RunDisable(ctx, client, printer, fs.Arg(0))
+
+	case "delete":
+		fs := flag.NewFlagSet("endpoint delete", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		fs.Usage = func() { fmt.Fprint(os.Stderr, "Usage: krakenkey endpoint delete <id>\n") }
+		if err := fs.Parse(subArgs); err != nil {
+			return err
+		}
+		if fs.NArg() == 0 {
+			return &api.ErrConfig{Message: "endpoint ID is required"}
+		}
+		return endpoint.RunDelete(ctx, client, printer, fs.Arg(0))
+
+	case "region":
+		return runEndpointRegion(ctx, client, printer, subArgs)
+
+	default:
+		return fmt.Errorf("unknown endpoint subcommand %q — run 'krakenkey endpoint --help'", sub)
+	}
+}
+
+func runEndpointRegion(ctx context.Context, client *api.Client, printer *output.Printer, args []string) error {
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
+		fmt.Print("Usage: krakenkey endpoint region <add|remove> <endpoint-id> <region>\n")
+		return nil
+	}
+
+	sub := args[0]
+	subArgs := args[1:]
+
+	switch sub {
+	case "add":
+		if len(subArgs) < 2 {
+			return &api.ErrConfig{Message: "endpoint ID and region are required"}
+		}
+		return endpoint.RunAddRegion(ctx, client, printer, subArgs[0], subArgs[1])
+
+	case "remove":
+		if len(subArgs) < 2 {
+			return &api.ErrConfig{Message: "endpoint ID and region are required"}
+		}
+		return endpoint.RunRemoveRegion(ctx, client, printer, subArgs[0], subArgs[1])
+
+	default:
+		return fmt.Errorf("unknown region subcommand %q — use 'add' or 'remove'", sub)
+	}
+}
+
 // ── usage strings ─────────────────────────────────────────────────────────────
 
 func printUsage() {
@@ -648,6 +778,7 @@ Commands:
   auth        Manage authentication and API keys
   cert        Certificate lifecycle management
   domain      Domain registration and verification
+  endpoint    Endpoint monitoring management
   account     Account and subscription info
   version     Print version and exit
 
@@ -734,4 +865,26 @@ Examples:
   krakenkey cert list --status issued
   krakenkey cert download 42 --out ./example.crt
   krakenkey cert update 42 --auto-renew=true
+`
+
+const endpointUsage = `Manage monitored endpoints.
+
+Usage:
+  krakenkey endpoint <subcommand> [flags]
+
+Subcommands:
+  add <host>            Add a monitored endpoint
+  list                  List all endpoints
+  show <id>             Show endpoint details
+  enable <id>           Enable a disabled endpoint
+  disable <id>          Disable an endpoint
+  delete <id>           Delete an endpoint
+  region add <id> <r>   Add a hosted probe region
+  region remove <id> <r> Remove a hosted probe region
+
+Examples:
+  krakenkey endpoint add example.com --port 443 --label "Production"
+  krakenkey endpoint list
+  krakenkey endpoint disable <id>
+  krakenkey endpoint region add <id> us-east-1
 `
