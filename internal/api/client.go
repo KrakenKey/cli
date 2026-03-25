@@ -251,7 +251,7 @@ func (c *Client) DeleteAPIKey(ctx context.Context, id string) error {
 
 // Endpoint methods
 
-func (c *Client) CreateEndpoint(ctx context.Context, host string, port int, sni, label *string) (*Endpoint, error) {
+func (c *Client) CreateEndpoint(ctx context.Context, host string, port int, sni, label *string, probeIds []string) (*Endpoint, error) {
 	body := map[string]any{"host": host, "port": port}
 	if sni != nil {
 		body["sni"] = *sni
@@ -259,11 +259,22 @@ func (c *Client) CreateEndpoint(ctx context.Context, host string, port int, sni,
 	if label != nil {
 		body["label"] = *label
 	}
+	if len(probeIds) > 0 {
+		body["probeIds"] = probeIds
+	}
 	var ep Endpoint
 	if err := c.do(ctx, http.MethodPost, "/endpoints", body, &ep); err != nil {
 		return nil, err
 	}
 	return &ep, nil
+}
+
+func (c *Client) ListUserProbes(ctx context.Context) ([]Probe, error) {
+	var probes []Probe
+	if err := c.do(ctx, http.MethodGet, "/endpoints/probes/mine", nil, &probes); err != nil {
+		return nil, err
+	}
+	return probes, nil
 }
 
 func (c *Client) ListEndpoints(ctx context.Context) ([]Endpoint, error) {

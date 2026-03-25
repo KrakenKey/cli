@@ -139,10 +139,11 @@ type Endpoint struct {
 	Port          int                   `json:"port"`
 	SNI           *string               `json:"sni"`
 	Label         *string               `json:"label"`
-	IsActive      bool                  `json:"isActive"`
-	HostedRegions []EndpointHostedRegion `json:"hostedRegions"`
-	CreatedAt     time.Time             `json:"createdAt"`
-	UpdatedAt     time.Time             `json:"updatedAt"`
+	IsActive         bool                      `json:"isActive"`
+	HostedRegions    []EndpointHostedRegion    `json:"hostedRegions"`
+	ProbeAssignments []EndpointProbeAssignment `json:"probeAssignments"`
+	CreatedAt        time.Time                 `json:"createdAt"`
+	UpdatedAt        time.Time                 `json:"updatedAt"`
 }
 
 // EndpointHostedRegion links an endpoint to a hosted probe region.
@@ -150,6 +151,29 @@ type EndpointHostedRegion struct {
 	ID         string    `json:"id"`
 	EndpointID string    `json:"endpointId"`
 	Region     string    `json:"region"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+// Probe represents a registered probe (connected or hosted).
+type Probe struct {
+	ID         string     `json:"id"`
+	Name       string     `json:"name"`
+	Version    string     `json:"version"`
+	Mode       string     `json:"mode"`
+	Region     *string    `json:"region"`
+	OS         string     `json:"os"`
+	Arch       string     `json:"arch"`
+	Status     string     `json:"status"`
+	LastSeenAt *time.Time `json:"lastSeenAt"`
+	CreatedAt  time.Time  `json:"createdAt"`
+}
+
+// EndpointProbeAssignment links an endpoint to a connected probe.
+type EndpointProbeAssignment struct {
+	ID         string    `json:"id"`
+	EndpointID string    `json:"endpointId"`
+	ProbeID    string    `json:"probeId"`
+	Probe      *Probe    `json:"probe"`
 	CreatedAt  time.Time `json:"createdAt"`
 }
 

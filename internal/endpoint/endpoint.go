@@ -12,8 +12,8 @@ import (
 )
 
 // RunAdd creates a new monitored endpoint.
-func RunAdd(ctx context.Context, client *api.Client, printer *output.Printer, host string, port int, sni, label *string) error {
-	ep, err := client.CreateEndpoint(ctx, host, port, sni, label)
+func RunAdd(ctx context.Context, client *api.Client, printer *output.Printer, host string, port int, sni, label *string, probeIds []string) error {
+	ep, err := client.CreateEndpoint(ctx, host, port, sni, label, probeIds)
 	if err != nil {
 		return err
 	}
@@ -23,7 +23,51 @@ func RunAdd(ctx context.Context, client *api.Client, printer *output.Printer, ho
 	if ep.Label != nil && *ep.Label != "" {
 		printer.Info("Label: %s", *ep.Label)
 	}
+	if len(ep.ProbeAssignments) > 0 {
+		names := make([]string, len(ep.ProbeAssignments))
+		for i, a := range ep.ProbeAssignments {
+			if a.Probe != nil {
+				names[i] = a.Probe.Name
+			} else {
+				names[i] = a.ProbeID
+			}
+		}
+		printer.Info("Assigned probes: %s", strings.Join(names, ", "))
+	}
 	printer.Info("Run `krakenkey endpoint list` to see all monitored endpoints")
+	return nil
+}
+
+// RunListProbes lists the user's connected probes available for assignment.
+func RunListProbes(ctx context.Context, client *api.Client, printer *output.Printer) error {
+	probes, err := client.ListUserProbes(ctx)
+	if err != nil {
+		return err
+	}
+
+	printer.JSON(probes)
+
+	if len(probes) == 0 {
+		printer.Info("No connected probes registered")
+		printer.Println("")
+		printer.Println("Set up a probe with KK_PROBE_MODE=connected and your API key to get started")
+		return nil
+	}
+
+	headers := []string{"ID", "Name", "Region", "Status", "Last Seen"}
+	rows := make([][]string, len(probes))
+	for i, p := range probes {
+		region := "-"
+		if p.Region != nil {
+			region = *p.Region
+		}
+		lastSeen := "-"
+		if p.LastSeenAt != nil {
+			lastSeen = p.LastSeenAt.Format(time.RFC3339)
+		}
+		rows[i] = []string{p.ID, p.Name, region, p.Status, lastSeen}
+	}
+	printer.Table(headers, rows)
 	return nil
 }
 

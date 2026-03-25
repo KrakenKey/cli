@@ -655,15 +655,17 @@ func runEndpoint(ctx context.Context, client *api.Client, printer *output.Printe
 		fs := flag.NewFlagSet("endpoint add", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
 		var (
-			port     int
-			sniFlag  string
+			port      int
+			sniFlag   string
 			labelFlag string
+			probes    stringsFlag
 		)
 		fs.IntVar(&port, "port", 443, "Port to monitor (default: 443)")
 		fs.StringVar(&sniFlag, "sni", "", "SNI override (optional)")
 		fs.StringVar(&labelFlag, "label", "", "Label (optional)")
+		fs.Var(&probes, "probe", "Connected probe ID to assign (repeat for multiple)")
 		fs.Usage = func() {
-			fmt.Fprint(os.Stderr, "Usage: krakenkey endpoint add <host> [--port 443] [--sni host] [--label name]\n")
+			fmt.Fprint(os.Stderr, "Usage: krakenkey endpoint add <host> [--port 443] [--sni host] [--label name] [--probe id]\n")
 		}
 		if err := fs.Parse(subArgs); err != nil {
 			return err
@@ -678,7 +680,10 @@ func runEndpoint(ctx context.Context, client *api.Client, printer *output.Printe
 		if labelFlag != "" {
 			label = &labelFlag
 		}
-		return endpoint.RunAdd(ctx, client, printer, fs.Arg(0), port, sni, label)
+		return endpoint.RunAdd(ctx, client, printer, fs.Arg(0), port, sni, label, []string(probes))
+
+	case "probes":
+		return endpoint.RunListProbes(ctx, client, printer)
 
 	case "list":
 		return endpoint.RunList(ctx, client, printer)
@@ -873,17 +878,19 @@ Usage:
   krakenkey endpoint <subcommand> [flags]
 
 Subcommands:
-  add <host>            Add a monitored endpoint
-  list                  List all endpoints
-  show <id>             Show endpoint details
-  enable <id>           Enable a disabled endpoint
-  disable <id>          Disable an endpoint
-  delete <id>           Delete an endpoint
-  region add <id> <r>   Add a hosted probe region
+  add <host>             Add a monitored endpoint
+  list                   List all endpoints
+  show <id>              Show endpoint details
+  probes                 List your connected probes available for assignment
+  enable <id>            Enable a disabled endpoint
+  disable <id>           Disable an endpoint
+  delete <id>            Delete an endpoint
+  region add <id> <r>    Add a hosted probe region
   region remove <id> <r> Remove a hosted probe region
 
 Examples:
-  krakenkey endpoint add example.com --port 443 --label "Production"
+  krakenkey endpoint probes
+  krakenkey endpoint add example.com --port 443 --label "Production" --probe <probe-id>
   krakenkey endpoint list
   krakenkey endpoint disable <id>
   krakenkey endpoint region add <id> us-east-1
