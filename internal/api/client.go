@@ -318,6 +318,27 @@ func (c *Client) RemoveEndpointRegion(ctx context.Context, id, region string) er
 	return c.do(ctx, http.MethodDelete, "/endpoints/"+id+"/regions/"+region, nil, nil)
 }
 
+func (c *Client) AssignProbes(ctx context.Context, id string, probeIds []string) ([]EndpointProbeAssignment, error) {
+	body := map[string]any{"probeIds": probeIds}
+	var assignments []EndpointProbeAssignment
+	if err := c.do(ctx, http.MethodPost, "/endpoints/"+id+"/probes", body, &assignments); err != nil {
+		return nil, err
+	}
+	return assignments, nil
+}
+
+func (c *Client) UnassignProbe(ctx context.Context, endpointID, probeID string) error {
+	return c.do(ctx, http.MethodDelete, "/endpoints/"+endpointID+"/probes/"+probeID, nil, nil)
+}
+
+func (c *Client) RequestScan(ctx context.Context, id string) (*Endpoint, error) {
+	var ep Endpoint
+	if err := c.do(ctx, http.MethodPost, "/endpoints/"+id+"/scan", nil, &ep); err != nil {
+		return nil, err
+	}
+	return &ep, nil
+}
+
 // Billing methods
 
 func (c *Client) GetSubscription(ctx context.Context) (*Subscription, error) {

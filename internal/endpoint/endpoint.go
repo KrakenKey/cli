@@ -85,7 +85,7 @@ func RunList(ctx context.Context, client *api.Client, printer *output.Printer) e
 		return nil
 	}
 
-	headers := []string{"ID", "Host", "Port", "Label", "Active", "Regions", "Created"}
+	headers := []string{"ID", "Host", "Port", "Label", "Active", "Probes", "Regions", "Created"}
 	rows := make([][]string, len(endpoints))
 	for i, ep := range endpoints {
 		active := "yes"
@@ -95,6 +95,18 @@ func RunList(ctx context.Context, client *api.Client, printer *output.Printer) e
 		label := "-"
 		if ep.Label != nil && *ep.Label != "" {
 			label = *ep.Label
+		}
+		probes := "-"
+		if len(ep.ProbeAssignments) > 0 {
+			probeNames := make([]string, len(ep.ProbeAssignments))
+			for j, a := range ep.ProbeAssignments {
+				if a.Probe != nil {
+					probeNames[j] = a.Probe.Name
+				} else {
+					probeNames[j] = a.ProbeID[:8]
+				}
+			}
+			probes = strings.Join(probeNames, ", ")
 		}
 		regions := "-"
 		if len(ep.HostedRegions) > 0 {
@@ -110,6 +122,7 @@ func RunList(ctx context.Context, client *api.Client, printer *output.Printer) e
 			fmt.Sprintf("%d", ep.Port),
 			label,
 			active,
+			probes,
 			regions,
 			ep.CreatedAt.Format(time.RFC3339),
 		}
@@ -142,6 +155,17 @@ func RunShow(ctx context.Context, client *api.Client, printer *output.Printer, i
 			regionNames[i] = r.Region
 		}
 		printer.Println("Regions:  %s", strings.Join(regionNames, ", "))
+	}
+	if len(ep.ProbeAssignments) > 0 {
+		probeNames := make([]string, len(ep.ProbeAssignments))
+		for i, a := range ep.ProbeAssignments {
+			if a.Probe != nil {
+				probeNames[i] = fmt.Sprintf("%s (%s)", a.Probe.Name, a.ProbeID)
+			} else {
+				probeNames[i] = a.ProbeID
+			}
+		}
+		printer.Println("Probes:   %s", strings.Join(probeNames, ", "))
 	}
 	printer.Println("Created:  %s", ep.CreatedAt.Format(time.RFC3339))
 	return nil
@@ -196,5 +220,39 @@ func RunRemoveRegion(ctx context.Context, client *api.Client, printer *output.Pr
 		return err
 	}
 	printer.Success("Region %s removed from endpoint %s", region, id)
+	return nil
+}
+
+// RunAssignProbe assigns a connected probe to an endpoint.
+func RunAssignProbe(ctx context.Context, client *api.Client, printer *output.Printer, id, probeID string) error {
+	assignments, err := client.AssignProbes(ctx, id, []string{probeID})
+	if err != nil {
+		return err
+	}
+
+	printer.JSON(assignments)
+	printer.Success("Probe %s assigned to endpoint %s", probeID, id)
+	return nil
+}
+
+// RunUnassignProbe removes a connected probe from an endpoint.
+func RunUnassignProbe(ctx context.Context, client *api.Client, printer *output.Printer, id, probeID string) error {
+	if err := client.UnassignProbe(ctx, id, probeID); err != nil {
+		return err
+	}
+	printer.Success("Probe %s removed from endpoint %s", probeID, id)
+	return nil
+}
+
+// RunScan requests an on-demand scan of an endpoint.
+func RunScan(ctx context.Context, client *api.Client, printer *output.Printer, id string) error {
+	ep, err := client.RequestScan(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	printer.JSON(ep)
+	printer.Success("Scan requested for %s:%d", ep.Host, ep.Port)
+	printer.Info("Results will appear shortly in the dashboard or via `krakenkey endpoint show %s`", id)
 	return nil
 }

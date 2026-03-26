@@ -736,8 +736,23 @@ func runEndpoint(ctx context.Context, client *api.Client, printer *output.Printe
 		}
 		return endpoint.RunDelete(ctx, client, printer, fs.Arg(0))
 
+	case "scan":
+		fs := flag.NewFlagSet("endpoint scan", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		fs.Usage = func() { fmt.Fprint(os.Stderr, "Usage: krakenkey endpoint scan <id>\n") }
+		if err := fs.Parse(subArgs); err != nil {
+			return err
+		}
+		if fs.NArg() == 0 {
+			return &api.ErrConfig{Message: "endpoint ID is required"}
+		}
+		return endpoint.RunScan(ctx, client, printer, fs.Arg(0))
+
 	case "region":
 		return runEndpointRegion(ctx, client, printer, subArgs)
+
+	case "probe":
+		return runEndpointProbe(ctx, client, printer, subArgs)
 
 	default:
 		return fmt.Errorf("unknown endpoint subcommand %q — run 'krakenkey endpoint --help'", sub)
@@ -768,6 +783,33 @@ func runEndpointRegion(ctx context.Context, client *api.Client, printer *output.
 
 	default:
 		return fmt.Errorf("unknown region subcommand %q — use 'add' or 'remove'", sub)
+	}
+}
+
+func runEndpointProbe(ctx context.Context, client *api.Client, printer *output.Printer, args []string) error {
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
+		fmt.Print("Usage: krakenkey endpoint probe <add|remove> <endpoint-id> <probe-id>\n")
+		return nil
+	}
+
+	sub := args[0]
+	subArgs := args[1:]
+
+	switch sub {
+	case "add":
+		if len(subArgs) < 2 {
+			return &api.ErrConfig{Message: "endpoint ID and probe ID are required"}
+		}
+		return endpoint.RunAssignProbe(ctx, client, printer, subArgs[0], subArgs[1])
+
+	case "remove":
+		if len(subArgs) < 2 {
+			return &api.ErrConfig{Message: "endpoint ID and probe ID are required"}
+		}
+		return endpoint.RunUnassignProbe(ctx, client, printer, subArgs[0], subArgs[1])
+
+	default:
+		return fmt.Errorf("unknown probe subcommand %q — use 'add' or 'remove'", sub)
 	}
 }
 
@@ -878,20 +920,24 @@ Usage:
   krakenkey endpoint <subcommand> [flags]
 
 Subcommands:
-  add <host>             Add a monitored endpoint
-  list                   List all endpoints
-  show <id>              Show endpoint details
-  probes                 List your connected probes available for assignment
-  enable <id>            Enable a disabled endpoint
-  disable <id>           Disable an endpoint
-  delete <id>            Delete an endpoint
-  region add <id> <r>    Add a hosted probe region
-  region remove <id> <r> Remove a hosted probe region
+  add <host>                  Add a monitored endpoint
+  list                        List all endpoints
+  show <id>                   Show endpoint details
+  scan <id>                   Request an on-demand scan
+  probes                      List your connected probes
+  enable <id>                 Enable a disabled endpoint
+  disable <id>                Disable an endpoint
+  delete <id>                 Delete an endpoint
+  probe add <id> <probe-id>   Assign a connected probe
+  probe remove <id> <probe-id> Remove a connected probe
+  region add <id> <region>    Add a hosted probe region
+  region remove <id> <region> Remove a hosted probe region
 
 Examples:
   krakenkey endpoint probes
   krakenkey endpoint add example.com --port 443 --label "Production" --probe <probe-id>
-  krakenkey endpoint list
-  krakenkey endpoint disable <id>
+  krakenkey endpoint scan <id>
+  krakenkey endpoint probe add <id> <probe-id>
   krakenkey endpoint region add <id> us-east-1
+  krakenkey endpoint list
 `
