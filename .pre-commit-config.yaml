@@ -1,0 +1,16 @@
+repos:
+  - repo: local
+    hooks:
+      - id: go-vet
+        name: go vet
+        entry: go vet ./...
+        language: system
+        pass_filenames: false
+        types: [go]
+
+      - id: go-test
+        name: go test
+        entry: go test ./... -race -count=1
+        language: system
+        pass_filenames: false
+        types: [go]
