@@ -249,6 +249,96 @@ func (c *Client) DeleteAPIKey(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodDelete, "/auth/api-keys/"+id, nil, nil)
 }
 
+// Endpoint methods
+
+func (c *Client) CreateEndpoint(ctx context.Context, host string, port int, sni, label *string, probeIds []string) (*Endpoint, error) {
+	body := map[string]any{"host": host, "port": port}
+	if sni != nil {
+		body["sni"] = *sni
+	}
+	if label != nil {
+		body["label"] = *label
+	}
+	if len(probeIds) > 0 {
+		body["probeIds"] = probeIds
+	}
+	var ep Endpoint
+	if err := c.do(ctx, http.MethodPost, "/endpoints", body, &ep); err != nil {
+		return nil, err
+	}
+	return &ep, nil
+}
+
+func (c *Client) ListUserProbes(ctx context.Context) ([]Probe, error) {
+	var probes []Probe
+	if err := c.do(ctx, http.MethodGet, "/endpoints/probes/mine", nil, &probes); err != nil {
+		return nil, err
+	}
+	return probes, nil
+}
+
+func (c *Client) ListEndpoints(ctx context.Context) ([]Endpoint, error) {
+	var endpoints []Endpoint
+	if err := c.do(ctx, http.MethodGet, "/endpoints", nil, &endpoints); err != nil {
+		return nil, err
+	}
+	return endpoints, nil
+}
+
+func (c *Client) GetEndpoint(ctx context.Context, id string) (*Endpoint, error) {
+	var ep Endpoint
+	if err := c.do(ctx, http.MethodGet, "/endpoints/"+id, nil, &ep); err != nil {
+		return nil, err
+	}
+	return &ep, nil
+}
+
+func (c *Client) UpdateEndpoint(ctx context.Context, id string, updates map[string]any) (*Endpoint, error) {
+	var ep Endpoint
+	if err := c.do(ctx, http.MethodPatch, "/endpoints/"+id, updates, &ep); err != nil {
+		return nil, err
+	}
+	return &ep, nil
+}
+
+func (c *Client) DeleteEndpoint(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodDelete, "/endpoints/"+id, nil, nil)
+}
+
+func (c *Client) AddEndpointRegion(ctx context.Context, id, region string) (*EndpointHostedRegion, error) {
+	body := map[string]string{"region": region}
+	var ehr EndpointHostedRegion
+	if err := c.do(ctx, http.MethodPost, "/endpoints/"+id+"/regions", body, &ehr); err != nil {
+		return nil, err
+	}
+	return &ehr, nil
+}
+
+func (c *Client) RemoveEndpointRegion(ctx context.Context, id, region string) error {
+	return c.do(ctx, http.MethodDelete, "/endpoints/"+id+"/regions/"+region, nil, nil)
+}
+
+func (c *Client) AssignProbes(ctx context.Context, id string, probeIds []string) ([]EndpointProbeAssignment, error) {
+	body := map[string]any{"probeIds": probeIds}
+	var assignments []EndpointProbeAssignment
+	if err := c.do(ctx, http.MethodPost, "/endpoints/"+id+"/probes", body, &assignments); err != nil {
+		return nil, err
+	}
+	return assignments, nil
+}
+
+func (c *Client) UnassignProbe(ctx context.Context, endpointID, probeID string) error {
+	return c.do(ctx, http.MethodDelete, "/endpoints/"+endpointID+"/probes/"+probeID, nil, nil)
+}
+
+func (c *Client) RequestScan(ctx context.Context, id string) (*Endpoint, error) {
+	var ep Endpoint
+	if err := c.do(ctx, http.MethodPost, "/endpoints/"+id+"/scan", nil, &ep); err != nil {
+		return nil, err
+	}
+	return &ep, nil
+}
+
 // Billing methods
 
 func (c *Client) GetSubscription(ctx context.Context) (*Subscription, error) {
