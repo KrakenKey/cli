@@ -52,18 +52,25 @@ krakenkey cert issue --domain example.com
 ### `krakenkey auth`
 
 ```
-krakenkey auth login                      Set API key
-krakenkey auth logout                     Remove stored API key
-krakenkey auth status                     Show auth status
-krakenkey auth keys list                  List API keys
-krakenkey auth keys create --name <name>  Create a new API key
-krakenkey auth keys delete <id>           Delete an API key
+krakenkey auth login [--api-key <key>]        Save API key (prompts interactively if omitted)
+krakenkey auth logout                         Remove stored API key
+krakenkey auth status                         Show auth status and resource counts
+krakenkey auth keys list                      List API keys
+krakenkey auth keys create --name <name>      Create a new API key
+krakenkey auth keys delete <id>               Delete an API key
 ```
+
+`auth keys create` flags:
+
+| Flag | Description |
+|---|---|
+| `--name` | Name for the API key (required) |
+| `--expires-at` | Expiry date in ISO 8601 format (optional) |
 
 ### `krakenkey domain`
 
 ```
-krakenkey domain add <hostname>    Register a domain
+krakenkey domain add <hostname>    Register a domain and get the DNS TXT verification record
 krakenkey domain list              List all domains
 krakenkey domain show <id>         Show domain details and verification record
 krakenkey domain verify <id>       Trigger DNS TXT verification
@@ -73,23 +80,80 @@ krakenkey domain delete <id>       Delete a domain
 ### `krakenkey cert`
 
 ```
-krakenkey cert issue --domain <domain>    Generate CSR locally and submit for issuance
-krakenkey cert submit --csr <file>        Submit an existing CSR PEM
-krakenkey cert list [--status <status>]   List certificates
-krakenkey cert show <id>                  Show certificate details
-krakenkey cert download <id>              Download certificate PEM
-krakenkey cert renew <id>                 Trigger manual renewal
-krakenkey cert revoke <id>                Revoke a certificate
-krakenkey cert retry <id>                 Retry failed issuance
-krakenkey cert delete <id>                Delete a certificate
-krakenkey cert update <id>                Update certificate settings
+krakenkey cert issue --domain <domain>     Generate key + CSR locally, submit, and optionally wait
+krakenkey cert submit --csr <file>         Submit an existing CSR PEM file
+krakenkey cert list [--status <status>]    List certificates (filter: pending|issuing|issued|failed|renewing|revoking|revoked)
+krakenkey cert show <id>                   Show certificate details
+krakenkey cert download <id> [--out path]  Download certificate PEM
+krakenkey cert renew <id> [--wait]         Trigger manual renewal
+krakenkey cert revoke <id> [--reason N]    Revoke a certificate (RFC 5280 reason code 0–10)
+krakenkey cert retry <id> [--wait]         Retry failed issuance
+krakenkey cert update <id>                 Update certificate settings
+krakenkey cert delete <id>                 Delete a certificate (failed or revoked only)
 ```
+
+`cert issue` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--domain` | | Primary domain (CN) — required |
+| `--san` | | Additional SAN (repeat for multiple) |
+| `--key-type` | `ecdsa-p256` | Key type: `rsa-2048`, `rsa-4096`, `ecdsa-p256`, `ecdsa-p384` |
+| `--org` | | Organization (O) |
+| `--ou` | | Organizational unit (OU) |
+| `--locality` | | Locality (L) |
+| `--state` | | State or province (ST) |
+| `--country` | | Country code (C, e.g. US) |
+| `--key-out` | `./<domain>.key` | Private key output path |
+| `--csr-out` | `./<domain>.csr` | CSR output path |
+| `--out` | `./<domain>.crt` | Certificate output path |
+| `--auto-renew` | `false` | Enable automatic renewal |
+| `--wait` | `false` | Wait for issuance to complete |
+| `--poll-interval` | `15s` | How often to poll for status |
+| `--poll-timeout` | `10m` | Maximum time to wait |
+
+`cert submit` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--csr` | | Path to CSR PEM file — required |
+| `--out` | `./<cn>.crt` | Certificate output path |
+| `--auto-renew` | `false` | Enable automatic renewal |
+| `--wait` | `false` | Wait for issuance to complete |
+| `--poll-interval` | `15s` | How often to poll for status |
+| `--poll-timeout` | `10m` | Maximum time to wait |
+
+### `krakenkey endpoint`
+
+```
+krakenkey endpoint add <host> [flags]               Add a monitored endpoint
+krakenkey endpoint list                              List all endpoints
+krakenkey endpoint show <id>                         Show endpoint details
+krakenkey endpoint scan <id>                         Request an on-demand TLS scan
+krakenkey endpoint probes                            List your connected probes
+krakenkey endpoint enable <id>                       Re-enable a disabled endpoint
+krakenkey endpoint disable <id>                      Disable an endpoint
+krakenkey endpoint delete <id>                       Delete an endpoint
+krakenkey endpoint probe add <id> <probe-id>         Assign a connected probe
+krakenkey endpoint probe remove <id> <probe-id>      Remove a connected probe
+krakenkey endpoint region add <id> <region>           Add a hosted probe region
+krakenkey endpoint region remove <id> <region>        Remove a hosted probe region
+```
+
+`endpoint add` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--port` | `443` | Port to monitor |
+| `--sni` | | SNI override (optional) |
+| `--label` | | Human-readable label (optional) |
+| `--probe` | | Connected probe ID to assign (repeat for multiple) |
 
 ### `krakenkey account`
 
 ```
-krakenkey account show    Show profile
-krakenkey account plan    Show subscription and plan limits
+krakenkey account show    Show profile, email, plan, and resource counts
+krakenkey account plan    Show subscription details and plan limits
 ```
 
 ### Global flags
@@ -128,8 +192,7 @@ output: "text"
 **JSON** (`--output json` or `KK_OUTPUT=json`): machine-readable JSON on stdout. No color, no spinners. Every command outputs a JSON object or array. Errors are `{"error":"..."}` on stderr.
 
 ```bash
-# CI/CD example
-export KK_API_KEY="kk_..."
+# CI/CD example — set KK_API_KEY from your secrets manager
 export KK_OUTPUT=json
 
 CERT_ID=$(krakenkey cert issue --domain "$DOMAIN" --key-type ecdsa-p256 | jq -r '.id')
@@ -153,7 +216,7 @@ CERT_ID=$(krakenkey cert issue --domain "$DOMAIN" --key-type ecdsa-p256 | jq -r 
 
 ```bash
 docker run --rm \
-  -e KK_API_KEY="kk_..." \
+  -e KK_API_KEY \
   -e KK_OUTPUT=json \
   -v "$(pwd)/certs:/out" \
   ghcr.io/krakenkey/cli:latest \
