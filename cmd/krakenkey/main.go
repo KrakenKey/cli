@@ -4,13 +4,14 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	flag "github.com/spf13/pflag"
 
 	"github.com/krakenkey/cli/internal/api"
 	"github.com/krakenkey/cli/internal/account"
@@ -49,6 +50,7 @@ func run() int {
 	// Global flags.
 	globalFS := flag.NewFlagSet("krakenkey", flag.ContinueOnError)
 	globalFS.SetOutput(os.Stderr)
+	globalFS.SetInterspersed(false)
 	var (
 		apiURL    string
 		apiKey    string
@@ -71,11 +73,9 @@ func run() int {
 	}
 
 	// --version flag.
-	if v, _ := globalFS.Lookup("version").Value.(interface{ IsBoolFlag() bool }); v != nil {
-		if globalFS.Lookup("version").Value.String() == "true" {
-			fmt.Printf("krakenkey-cli %s\n", version)
-			return 0
-		}
+	if versionFlag, _ := globalFS.GetBool("version"); versionFlag {
+		fmt.Printf("krakenkey-cli %s\n", version)
+		return 0
 	}
 
 	remaining := globalFS.Args()
@@ -166,8 +166,9 @@ func mustInt(fs *flag.FlagSet, s, name string) (int, bool) {
 // stringsFlag accumulates repeated flag values (e.g. --san a --san b).
 type stringsFlag []string
 
-func (f *stringsFlag) String() string  { return strings.Join(*f, ",") }
+func (f *stringsFlag) String() string     { return strings.Join(*f, ",") }
 func (f *stringsFlag) Set(v string) error { *f = append(*f, v); return nil }
+func (f *stringsFlag) Type() string       { return "value" }
 
 // triBoolFlag is a *bool flag that is nil when not specified.
 type triBoolFlag struct{ val *bool }
@@ -187,6 +188,7 @@ func (f *triBoolFlag) Set(s string) error {
 	return nil
 }
 func (f *triBoolFlag) IsBoolFlag() bool { return true }
+func (f *triBoolFlag) Type() string     { return "bool" }
 
 // ── auth ─────────────────────────────────────────────────────────────────────
 
