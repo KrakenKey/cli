@@ -97,21 +97,57 @@ func RunShow(ctx context.Context, client *api.Client, printer *output.Printer, i
 	}
 
 	if c.Status == api.CertStatusIssued {
-		details, err := client.GetCertDetails(ctx, id)
+		chain, err := client.GetCertChain(ctx, id)
 		if err == nil {
 			printer.Println("")
-			printer.Println("Serial:      %s", details.SerialNumber)
-			printer.Println("Issuer:      %s", details.Issuer)
-			printer.Println("Valid from:  %s", details.ValidFrom.Format(time.RFC3339))
-			printer.Println("Valid to:    %s", details.ValidTo.Format(time.RFC3339))
-			printer.Println("Fingerprint: %s", details.Fingerprint)
+			printer.Println("Serial:      %s", chain.LeafCert.SerialNumber)
+			printer.Println("Issuer:      %s", chain.LeafCert.Issuer)
+			printer.Println("Valid from:  %s", chain.LeafCert.ValidFrom.Format(time.RFC3339))
+			printer.Println("Valid to:    %s", chain.LeafCert.ValidTo.Format(time.RFC3339))
+			printer.Println("Fingerprint: %s", chain.LeafCert.Fingerprint)
+
+			if len(chain.Intermediates) > 0 {
+				printer.Println("")
+				printer.Println("Chain (%d intermediate%s):", len(chain.Intermediates), pluralS(len(chain.Intermediates)))
+				for i, ic := range chain.Intermediates {
+					printer.Println("  [%d] Subject:     %s", i+1, ic.Subject)
+					printer.Println("      Issuer:      %s", ic.Issuer)
+					printer.Println("      Fingerprint: %s", ic.Fingerprint)
+				}
+			}
+		} else {
+			details, err := client.GetCertDetails(ctx, id)
+			if err == nil {
+				printer.Println("")
+				printer.Println("Serial:      %s", details.SerialNumber)
+				printer.Println("Issuer:      %s", details.Issuer)
+				printer.Println("Valid from:  %s", details.ValidFrom.Format(time.RFC3339))
+				printer.Println("Valid to:    %s", details.ValidTo.Format(time.RFC3339))
+				printer.Println("Fingerprint: %s", details.Fingerprint)
+			}
 		}
 	}
 	return nil
 }
 
+func pluralS(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+// DownloadFormat controls which PEM content is written by RunDownload.
+const (
+	FormatCert      = "cert"
+	FormatChain     = "chain"
+	FormatFullchain = "fullchain"
+)
+
 // RunDownload saves the certificate PEM to outPath (default: ./<cn>.crt).
-func RunDownload(ctx context.Context, client *api.Client, printer *output.Printer, id int, outPath string) error {
+// format controls what is written: "cert" (leaf only), "chain" (intermediates only),
+// or "fullchain" (leaf + intermediates).
+func RunDownload(ctx context.Context, client *api.Client, printer *output.Printer, id int, outPath, format string) error {
 	c, err := client.GetCert(ctx, id)
 	if err != nil {
 		return err
@@ -124,16 +160,45 @@ func RunDownload(ctx context.Context, client *api.Client, printer *output.Printe
 		return fmt.Errorf("certificate %d has no PEM data", id)
 	}
 
-	if outPath == "" {
-		outPath = cnFromCert(c) + ".crt"
+	if format == "" {
+		format = FormatCert
 	}
 
-	if err := os.WriteFile(outPath, []byte(c.CrtPem), 0o644); err != nil {
+	var pemData string
+	switch format {
+	case FormatCert:
+		pemData = c.CrtPem
+	case FormatChain:
+		if c.ChainPem == "" {
+			return fmt.Errorf("certificate %d has no intermediate chain data", id)
+		}
+		pemData = c.ChainPem
+	case FormatFullchain:
+		chain, err := client.GetCertChain(ctx, id)
+		if err != nil {
+			return fmt.Errorf("fetch chain: %w", err)
+		}
+		pemData = chain.FullChainPem
+	default:
+		return fmt.Errorf("invalid format %q: must be cert, chain, or fullchain", format)
+	}
+
+	if outPath == "" {
+		suffix := ".crt"
+		if format == FormatChain {
+			suffix = ".chain.crt"
+		} else if format == FormatFullchain {
+			suffix = ".fullchain.crt"
+		}
+		outPath = cnFromCert(c) + suffix
+	}
+
+	if err := os.WriteFile(outPath, []byte(pemData), 0o644); err != nil {
 		return fmt.Errorf("write certificate: %w", err)
 	}
 
-	printer.JSON(map[string]string{"path": outPath})
-	printer.Success("Certificate saved to %s", outPath)
+	printer.JSON(map[string]string{"path": outPath, "format": format})
+	printer.Success("Certificate (%s) saved to %s", format, outPath)
 	return nil
 }
 

@@ -24,6 +24,8 @@ type IssueOptions struct {
 	KeyOut       string // path for private key PEM, default: ./<domain>.key
 	CSROut       string // path for CSR PEM, default: ./<domain>.csr
 	Out          string // path for certificate PEM, default: ./<domain>.crt
+	ChainOut     string // path for chain PEM, default: ./<domain>.chain.crt
+	FullchainOut string // path for fullchain PEM, default: ./<domain>.fullchain.crt
 	AutoRenew    bool
 	Wait         bool
 	PollInterval time.Duration
@@ -49,6 +51,14 @@ func RunIssue(ctx context.Context, client *api.Client, printer *output.Printer, 
 	certOut := opts.Out
 	if certOut == "" {
 		certOut = opts.Domain + ".crt"
+	}
+	chainOut := opts.ChainOut
+	if chainOut == "" {
+		chainOut = opts.Domain + ".chain.crt"
+	}
+	fullchainOut := opts.FullchainOut
+	if fullchainOut == "" {
+		fullchainOut = opts.Domain + ".fullchain.crt"
 	}
 
 	printer.Info("Generating %s key pair...", keyType)
@@ -112,6 +122,21 @@ func RunIssue(ctx context.Context, client *api.Client, printer *output.Printer, 
 			return fmt.Errorf("write certificate: %w", err)
 		}
 		printer.Info("Certificate saved to %s", certOut)
+
+		if cert.ChainPem != "" {
+			if err := os.WriteFile(chainOut, []byte(cert.ChainPem), 0o644); err != nil {
+				return fmt.Errorf("write chain: %w", err)
+			}
+			printer.Info("Chain saved to %s", chainOut)
+		}
+
+		chain, err := client.GetCertChain(ctx, cert.ID)
+		if err == nil {
+			if err := os.WriteFile(fullchainOut, []byte(chain.FullChainPem), 0o644); err != nil {
+				return fmt.Errorf("write fullchain: %w", err)
+			}
+			printer.Info("Full chain saved to %s", fullchainOut)
+		}
 	}
 
 	printer.JSON(cert)
