@@ -184,11 +184,14 @@ func RunDownload(ctx context.Context, client *api.Client, printer *output.Printe
 	}
 
 	if outPath == "" {
-		suffix := ".crt"
-		if format == FormatChain {
+		var suffix string
+		switch format {
+		case FormatChain:
 			suffix = ".chain.crt"
-		} else if format == FormatFullchain {
+		case FormatFullchain:
 			suffix = ".fullchain.crt"
+		default:
+			suffix = ".crt"
 		}
 		outPath = cnFromCert(c) + suffix
 	}
