@@ -83,8 +83,8 @@ krakenkey domain delete <id>       Delete a domain
 krakenkey cert issue --domain <domain>     Generate key + CSR locally, submit, and optionally wait
 krakenkey cert submit --csr <file>         Submit an existing CSR PEM file
 krakenkey cert list [--status <status>]    List certificates (filter: pending|issuing|issued|failed|renewing|revoking|revoked)
-krakenkey cert show <id>                   Show certificate details
-krakenkey cert download <id> [--out path]  Download certificate PEM
+krakenkey cert show <id>                   Show certificate details including intermediate chain
+krakenkey cert download <id> [--out path]  Download certificate PEM (see --format for chain options)
 krakenkey cert renew <id> [--wait]         Trigger manual renewal
 krakenkey cert revoke <id> [--reason N]    Revoke a certificate (RFC 5280 reason code 0–10)
 krakenkey cert retry <id> [--wait]         Retry failed issuance
@@ -106,7 +106,9 @@ krakenkey cert delete <id>                 Delete a certificate (failed or revok
 | `--country` | | Country code (C, e.g. US) |
 | `--key-out` | `./<domain>.key` | Private key output path |
 | `--csr-out` | `./<domain>.csr` | CSR output path |
-| `--out` | `./<domain>.crt` | Certificate output path |
+| `--out` | `./<domain>.crt` | Leaf certificate output path |
+| `--chain-out` | `./<domain>.chain.pem` | Intermediate chain output path |
+| `--fullchain-out` | `./<domain>.fullchain.pem` | Full chain output path (leaf + intermediates) |
 | `--auto-renew` | `false` | Enable automatic renewal |
 | `--wait` | `false` | Wait for issuance to complete |
 | `--poll-interval` | `15s` | How often to poll for status |
@@ -117,11 +119,20 @@ krakenkey cert delete <id>                 Delete a certificate (failed or revok
 | Flag | Default | Description |
 |---|---|---|
 | `--csr` | | Path to CSR PEM file — required |
-| `--out` | `./<cn>.crt` | Certificate output path |
+| `--out` | `./<cn>.crt` | Leaf certificate output path |
+| `--chain-out` | `./<cn>.chain.pem` | Intermediate chain output path |
+| `--fullchain-out` | `./<cn>.fullchain.pem` | Full chain output path (leaf + intermediates) |
 | `--auto-renew` | `false` | Enable automatic renewal |
 | `--wait` | `false` | Wait for issuance to complete |
 | `--poll-interval` | `15s` | How often to poll for status |
 | `--poll-timeout` | `10m` | Maximum time to wait |
+
+`cert download` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--out` | `./<domain>.crt` | Output file path |
+| `--format` | `cert` | Download format: `cert` (leaf only), `chain` (intermediates only), `fullchain` (leaf + intermediates) |
 
 ### `krakenkey endpoint`
 
@@ -209,7 +220,7 @@ CERT_ID=$(krakenkey cert issue --domain "$DOMAIN" --key-type ecdsa-p256 | jq -r 
     KK_API_KEY: ${{ secrets.KK_API_KEY }}
     KK_OUTPUT: json
   with:
-    args: cert issue --domain example.com --key-out ./example.com.key --out ./example.com.crt
+    args: cert issue --domain example.com --key-out ./example.com.key --out ./example.com.crt --fullchain-out ./example.com.fullchain.pem
 ```
 
 **Generic shell**:
@@ -220,8 +231,33 @@ docker run --rm \
   -e KK_OUTPUT=json \
   -v "$(pwd)/certs:/out" \
   ghcr.io/krakenkey/cli:latest \
-  cert issue --domain example.com --key-out /out/example.com.key --out /out/example.com.crt
+  cert issue --domain example.com --key-out /out/example.com.key --out /out/example.com.crt --fullchain-out /out/example.com.fullchain.pem
 ```
+
+## Certificate chain
+
+After issuance, `cert issue` and `cert submit` write up to three certificate files:
+
+| Flag | File | Content |
+|---|---|---|
+| `--out` | `<domain>.crt` | Leaf certificate only |
+| `--chain-out` | `<domain>.chain.pem` | Intermediate CA certificates only |
+| `--fullchain-out` | `<domain>.fullchain.pem` | Leaf + intermediates (concatenated) |
+
+For `cert download`, use `--format` to choose which file to save:
+
+```bash
+# Download leaf only (default)
+krakenkey cert download <id> --format cert --out ./cert.pem
+
+# Download intermediates only
+krakenkey cert download <id> --format chain --out ./chain.pem
+
+# Download full chain (leaf + intermediates) — use this for nginx, Caddy, HAProxy
+krakenkey cert download <id> --format fullchain --out ./fullchain.pem
+```
+
+`cert show` displays intermediate chain details (subject, issuer, fingerprint) alongside the leaf certificate.
 
 ## CSR generation
 
