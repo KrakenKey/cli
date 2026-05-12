@@ -80,16 +80,17 @@ krakenkey domain delete <id>       Delete a domain
 ### `krakenkey cert`
 
 ```
-krakenkey cert issue --domain <domain>     Generate key + CSR locally, submit, and optionally wait
-krakenkey cert submit --csr <file>         Submit an existing CSR PEM file
-krakenkey cert list [--status <status>]    List certificates (filter: pending|issuing|issued|failed|renewing|revoking|revoked)
-krakenkey cert show <id>                   Show certificate details
-krakenkey cert download <id> [--out path]  Download certificate PEM
-krakenkey cert renew <id> [--wait]         Trigger manual renewal
-krakenkey cert revoke <id> [--reason N]    Revoke a certificate (RFC 5280 reason code 0–10)
-krakenkey cert retry <id> [--wait]         Retry failed issuance
-krakenkey cert update <id>                 Update certificate settings
-krakenkey cert delete <id>                 Delete a certificate (failed or revoked only)
+krakenkey cert issue --domain <domain>              Generate key + CSR locally, submit, and optionally wait
+krakenkey cert submit --csr <file>                  Submit an existing CSR PEM file
+krakenkey cert list [--status <status>]             List certificates (filter: pending|issuing|issued|failed|renewing|revoking|revoked)
+krakenkey cert show <id>                            Show certificate details
+krakenkey cert download <id> [--out path]           Download certificate PEM
+                              [--format cert|chain|fullchain]
+krakenkey cert renew <id> [--wait]                  Trigger manual renewal
+krakenkey cert revoke <id> [--reason N]             Revoke a certificate (RFC 5280 reason code 0–10)
+krakenkey cert retry <id> [--wait]                  Retry failed issuance
+krakenkey cert update <id>                          Update certificate settings
+krakenkey cert delete <id>                          Delete a certificate (failed or revoked only)
 ```
 
 `cert issue` flags:
@@ -106,7 +107,9 @@ krakenkey cert delete <id>                 Delete a certificate (failed or revok
 | `--country` | | Country code (C, e.g. US) |
 | `--key-out` | `./<domain>.key` | Private key output path |
 | `--csr-out` | `./<domain>.csr` | CSR output path |
-| `--out` | `./<domain>.crt` | Certificate output path |
+| `--out` | `./<domain>.crt` | Leaf certificate output path |
+| `--chain-out` | `./<domain>.chain.pem` | Intermediate CA chain output path |
+| `--fullchain-out` | `./<domain>.fullchain.pem` | Full chain output path (leaf + intermediates) |
 | `--auto-renew` | `false` | Enable automatic renewal |
 | `--wait` | `false` | Wait for issuance to complete |
 | `--poll-interval` | `15s` | How often to poll for status |
@@ -117,11 +120,20 @@ krakenkey cert delete <id>                 Delete a certificate (failed or revok
 | Flag | Default | Description |
 |---|---|---|
 | `--csr` | | Path to CSR PEM file — required |
-| `--out` | `./<cn>.crt` | Certificate output path |
+| `--out` | `./<cn>.crt` | Leaf certificate output path |
+| `--chain-out` | `./<cn>.chain.pem` | Intermediate CA chain output path |
+| `--fullchain-out` | `./<cn>.fullchain.pem` | Full chain output path (leaf + intermediates) |
 | `--auto-renew` | `false` | Enable automatic renewal |
 | `--wait` | `false` | Wait for issuance to complete |
 | `--poll-interval` | `15s` | How often to poll for status |
 | `--poll-timeout` | `10m` | Maximum time to wait |
+
+`cert download` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--out` | `./<cn>.crt` | Output file path |
+| `--format` | `cert` | Certificate format: `cert` (leaf only), `chain` (intermediates only), `fullchain` (leaf + intermediates) |
 
 ### `krakenkey endpoint`
 
@@ -136,7 +148,7 @@ krakenkey endpoint disable <id>                      Disable an endpoint
 krakenkey endpoint delete <id>                       Delete an endpoint
 krakenkey endpoint probe add <id> <probe-id>         Assign a connected probe
 krakenkey endpoint probe remove <id> <probe-id>      Remove a connected probe
-krakenkey endpoint region add <id> <region>           Add a hosted probe region
+krakenkey endpoint region add <id> <region>           Add a hosted probe region (Starter+)
 krakenkey endpoint region remove <id> <region>        Remove a hosted probe region
 ```
 
@@ -185,6 +197,28 @@ output: "text"
 | API key | `--api-key` | `KK_API_KEY` |
 | Output format | `--output` | `KK_OUTPUT` |
 
+## Certificate chain
+
+`cert issue` and `cert submit` produce three output files alongside the private key:
+
+| File | Flag | Default | Contents |
+|------|------|---------|----------|
+| Leaf certificate | `--out` | `./<domain>.crt` | End-entity certificate only |
+| Intermediate chain | `--chain-out` | `./<domain>.chain.pem` | Intermediate CA certificates |
+| Full chain | `--fullchain-out` | `./<domain>.fullchain.pem` | Leaf + intermediates |
+
+Most web servers (nginx, Caddy, HAProxy) expect the full chain. Use `--fullchain-out` in production deployments.
+
+`cert download` accepts `--format` with values `cert` (default), `chain`, and `fullchain` to download a specific format for an already-issued certificate:
+
+```bash
+# Download full chain for deployment
+krakenkey cert download 42 --format fullchain --out ./fullchain.pem
+
+# Download intermediates only
+krakenkey cert download 42 --format chain --out ./chain.pem
+```
+
 ## Output formats
 
 **Text** (default): colored, human-readable output with aligned tables and spinners.
@@ -209,7 +243,7 @@ CERT_ID=$(krakenkey cert issue --domain "$DOMAIN" --key-type ecdsa-p256 | jq -r 
     KK_API_KEY: ${{ secrets.KK_API_KEY }}
     KK_OUTPUT: json
   with:
-    args: cert issue --domain example.com --key-out ./example.com.key --out ./example.com.crt
+    args: cert issue --domain example.com --key-out ./example.com.key --out ./example.com.crt --fullchain-out ./example.com.fullchain.pem
 ```
 
 **Generic shell**:
@@ -220,7 +254,10 @@ docker run --rm \
   -e KK_OUTPUT=json \
   -v "$(pwd)/certs:/out" \
   ghcr.io/krakenkey/cli:latest \
-  cert issue --domain example.com --key-out /out/example.com.key --out /out/example.com.crt
+  cert issue --domain example.com \
+    --key-out /out/example.com.key \
+    --out /out/example.com.crt \
+    --fullchain-out /out/example.com.fullchain.pem
 ```
 
 ## CSR generation
