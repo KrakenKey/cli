@@ -200,6 +200,82 @@ func TestRunIssue_DefaultFilenames(t *testing.T) {
 	}
 }
 
+func TestRunIssue_WithWait_WritesChainFiles(t *testing.T) {
+	dir := t.TempDir()
+	certPem := "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
+	chainPem := "-----BEGIN CERTIFICATE-----\nintermediate\n-----END CERTIFICATE-----\n"
+	fullChainPem := certPem + chainPem
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/certs/tls"):
+			json.NewEncoder(w).Encode(api.CertResponse{ID: 10, Status: "pending"})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/chain"):
+			json.NewEncoder(w).Encode(api.TlsCertChainInfo{FullChainPem: fullChainPem})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/certs/tls/10"):
+			json.NewEncoder(w).Encode(api.TlsCert{
+				ID:       10,
+				Status:   "issued",
+				CrtPem:   certPem,
+				ChainPem: chainPem,
+				ParsedCsr: &api.ParsedCsr{
+					Subject: []api.CsrSubjectField{{Name: "commonName", Value: "test.example.com"}},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL)
+	printer, _, _ := newPrinter()
+
+	err := cert.RunIssue(context.Background(), client, printer, cert.IssueOptions{
+		Domain:       "test.example.com",
+		KeyType:      "ecdsa-p256",
+		KeyOut:       filepath.Join(dir, "test.key"),
+		CSROut:       filepath.Join(dir, "test.csr"),
+		Out:          filepath.Join(dir, "test.crt"),
+		ChainOut:     filepath.Join(dir, "test.chain.crt"),
+		FullchainOut: filepath.Join(dir, "test.fullchain.crt"),
+		Wait:         true,
+		PollInterval: 50 * time.Millisecond,
+		PollTimeout:  2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("RunIssue: %v", err)
+	}
+
+	// Verify cert file
+	data, err := os.ReadFile(filepath.Join(dir, "test.crt"))
+	if err != nil {
+		t.Fatalf("read cert: %v", err)
+	}
+	if string(data) != certPem {
+		t.Errorf("cert content = %q, want leaf PEM", string(data))
+	}
+
+	// Verify chain file
+	data, err = os.ReadFile(filepath.Join(dir, "test.chain.crt"))
+	if err != nil {
+		t.Fatalf("read chain: %v", err)
+	}
+	if string(data) != chainPem {
+		t.Errorf("chain content = %q, want chain PEM", string(data))
+	}
+
+	// Verify fullchain file
+	data, err = os.ReadFile(filepath.Join(dir, "test.fullchain.crt"))
+	if err != nil {
+		t.Fatalf("read fullchain: %v", err)
+	}
+	if string(data) != fullChainPem {
+		t.Errorf("fullchain content = %q, want fullchain PEM", string(data))
+	}
+}
+
 func TestRunIssue_InvalidKeyType(t *testing.T) {
 	dir := t.TempDir()
 

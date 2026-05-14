@@ -173,6 +173,81 @@ func TestRunSubmit_WithAutoRenew(t *testing.T) {
 	}
 }
 
+func TestRunSubmit_WithWait_WritesChainFiles(t *testing.T) {
+	dir := t.TempDir()
+	csrPath := writeCSRFile(t, dir, "test.csr")
+
+	certPem := "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n"
+	chainPem := "-----BEGIN CERTIFICATE-----\nintermediate\n-----END CERTIFICATE-----\n"
+	fullChainPem := certPem + chainPem
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost:
+			json.NewEncoder(w).Encode(api.CertResponse{ID: 20, Status: "pending"})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/chain"):
+			json.NewEncoder(w).Encode(api.TlsCertChainInfo{FullChainPem: fullChainPem})
+		case r.Method == http.MethodGet:
+			json.NewEncoder(w).Encode(api.TlsCert{
+				ID:       20,
+				Status:   "issued",
+				CrtPem:   certPem,
+				ChainPem: chainPem,
+				ParsedCsr: &api.ParsedCsr{
+					Subject: []api.CsrSubjectField{{Name: "commonName", Value: "submit.example.com"}},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL)
+	printer, _, _ := newPrinter()
+
+	err := cert.RunSubmit(context.Background(), client, printer, cert.SubmitOptions{
+		CSRPath:      csrPath,
+		Out:          filepath.Join(dir, "result.crt"),
+		ChainOut:     filepath.Join(dir, "result.chain.crt"),
+		FullchainOut: filepath.Join(dir, "result.fullchain.crt"),
+		Wait:         true,
+		PollInterval: 50 * time.Millisecond,
+		PollTimeout:  2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("RunSubmit: %v", err)
+	}
+
+	// Verify cert
+	data, err := os.ReadFile(filepath.Join(dir, "result.crt"))
+	if err != nil {
+		t.Fatalf("read cert: %v", err)
+	}
+	if string(data) != certPem {
+		t.Errorf("cert content = %q, want leaf PEM", string(data))
+	}
+
+	// Verify chain
+	data, err = os.ReadFile(filepath.Join(dir, "result.chain.crt"))
+	if err != nil {
+		t.Fatalf("read chain: %v", err)
+	}
+	if string(data) != chainPem {
+		t.Errorf("chain content = %q, want chain PEM", string(data))
+	}
+
+	// Verify fullchain
+	data, err = os.ReadFile(filepath.Join(dir, "result.fullchain.crt"))
+	if err != nil {
+		t.Fatalf("read fullchain: %v", err)
+	}
+	if string(data) != fullChainPem {
+		t.Errorf("fullchain content = %q, want fullchain PEM", string(data))
+	}
+}
+
 func TestRunSubmit_IssuanceFailed(t *testing.T) {
 	dir := t.TempDir()
 	csrPath := writeCSRFile(t, dir, "test.csr")

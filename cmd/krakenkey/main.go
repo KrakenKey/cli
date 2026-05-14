@@ -421,8 +421,9 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 	case "download":
 		fs := flag.NewFlagSet("cert download", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
-		var outPath string
+		var outPath, format string
 		fs.StringVar(&outPath, "out", "", "Output file path (default: ./<cn>.crt)")
+		fs.StringVar(&format, "format", "cert", "PEM format: cert (leaf only), chain (intermediates), fullchain (leaf + intermediates)")
 		if err := fs.Parse(subArgs); err != nil {
 			return err
 		}
@@ -433,7 +434,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		if !ok {
 			return &api.ErrConfig{Message: "certificate ID must be an integer"}
 		}
-		return cert.RunDownload(ctx, client, printer, id, outPath)
+		return cert.RunDownload(ctx, client, printer, id, outPath, format)
 
 	case "issue":
 		fs := flag.NewFlagSet("cert issue", flag.ContinueOnError)
@@ -449,6 +450,8 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 			keyOut       string
 			csrOut       string
 			out          string
+			chainOut     string
+			fullchainOut string
 			autoRenew    bool
 			wait         bool
 			pollInterval = 15 * time.Second
@@ -465,6 +468,8 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		fs.StringVar(&keyOut, "key-out", "", "Private key output path (default: ./<domain>.key)")
 		fs.StringVar(&csrOut, "csr-out", "", "CSR output path (default: ./<domain>.csr)")
 		fs.StringVar(&out, "out", "", "Certificate output path (default: ./<domain>.crt)")
+		fs.StringVar(&chainOut, "chain-out", "", "Chain output path (default: ./<domain>.chain.crt)")
+		fs.StringVar(&fullchainOut, "fullchain-out", "", "Full chain output path (default: ./<domain>.fullchain.crt)")
 		fs.BoolVar(&autoRenew, "auto-renew", false, "Enable automatic renewal")
 		fs.BoolVar(&wait, "wait", false, "Wait for issuance to complete")
 		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to poll for status")
@@ -491,6 +496,8 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 			KeyOut:       keyOut,
 			CSROut:       csrOut,
 			Out:          out,
+			ChainOut:     chainOut,
+			FullchainOut: fullchainOut,
 			AutoRenew:    autoRenew,
 			Wait:         wait,
 			PollInterval: pollInterval,
@@ -503,6 +510,8 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		var (
 			csrPath      string
 			out          string
+			chainOut     string
+			fullchainOut string
 			autoRenew    bool
 			wait         bool
 			pollInterval = 15 * time.Second
@@ -510,6 +519,8 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		)
 		fs.StringVar(&csrPath, "csr", "", "Path to CSR PEM file (required)")
 		fs.StringVar(&out, "out", "", "Certificate output path (default: ./<cn>.crt)")
+		fs.StringVar(&chainOut, "chain-out", "", "Chain output path (default: ./<cn>.chain.crt)")
+		fs.StringVar(&fullchainOut, "fullchain-out", "", "Full chain output path (default: ./<cn>.fullchain.crt)")
 		fs.BoolVar(&autoRenew, "auto-renew", false, "Enable automatic renewal")
 		fs.BoolVar(&wait, "wait", false, "Wait for issuance to complete")
 		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to poll for status")
@@ -527,6 +538,8 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		return cert.RunSubmit(ctx, client, printer, cert.SubmitOptions{
 			CSRPath:      csrPath,
 			Out:          out,
+			ChainOut:     chainOut,
+			FullchainOut: fullchainOut,
 			AutoRenew:    autoRenew,
 			Wait:         wait,
 			PollInterval: pollInterval,

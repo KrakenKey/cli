@@ -29,6 +29,7 @@ type TlsCert struct {
 	RawCsr        string     `json:"rawCsr"`
 	ParsedCsr     *ParsedCsr `json:"parsedCsr"`
 	CrtPem        string     `json:"crtPem"`
+	ChainPem      string     `json:"chainPem"`
 	Status        string     `json:"status"`
 	ExpiresAt     *time.Time `json:"expiresAt"`
 	LastRenewedAt *time.Time `json:"lastRenewedAt"`
@@ -80,6 +81,23 @@ type TlsCertDetails struct {
 	KeyType      string    `json:"keyType"`
 	KeySize      int       `json:"keySize"`
 	Fingerprint  string    `json:"fingerprint"`
+}
+
+// TlsCertChainEntry holds parsed details for an intermediate certificate.
+type TlsCertChainEntry struct {
+	SerialNumber string `json:"serialNumber"`
+	Issuer       string `json:"issuer"`
+	Subject      string `json:"subject"`
+	ValidFrom    string `json:"validFrom"`
+	ValidTo      string `json:"validTo"`
+	Fingerprint  string `json:"fingerprint"`
+}
+
+// TlsCertChainInfo holds the full certificate chain.
+type TlsCertChainInfo struct {
+	LeafCert      TlsCertDetails   `json:"leafCert"`
+	Intermediates []TlsCertChainEntry `json:"intermediates"`
+	FullChainPem  string              `json:"fullChainPem"`
 }
 
 // CertResponse is returned by mutating cert operations (create, renew, revoke, retry).

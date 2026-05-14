@@ -14,6 +14,8 @@ import (
 type SubmitOptions struct {
 	CSRPath      string // path to existing CSR PEM file
 	Out          string // path for certificate PEM output
+	ChainOut     string // path for chain PEM output
+	FullchainOut string // path for fullchain PEM output
 	AutoRenew    bool
 	Wait         bool
 	PollInterval time.Duration
@@ -67,6 +69,30 @@ func RunSubmit(ctx context.Context, client *api.Client, printer *output.Printer,
 			return fmt.Errorf("write certificate: %w", err)
 		}
 		printer.Info("Certificate saved to %s", certOut)
+
+		chainOut := opts.ChainOut
+		if chainOut == "" {
+			chainOut = cnFromCert(cert) + ".chain.crt"
+		}
+		fullchainOut := opts.FullchainOut
+		if fullchainOut == "" {
+			fullchainOut = cnFromCert(cert) + ".fullchain.crt"
+		}
+
+		if cert.ChainPem != "" {
+			if err := os.WriteFile(chainOut, []byte(cert.ChainPem), 0o644); err != nil {
+				return fmt.Errorf("write chain: %w", err)
+			}
+			printer.Info("Chain saved to %s", chainOut)
+		}
+
+		chainInfo, err := client.GetCertChain(ctx, cert.ID)
+		if err == nil {
+			if err := os.WriteFile(fullchainOut, []byte(chainInfo.FullChainPem), 0o644); err != nil {
+				return fmt.Errorf("write fullchain: %w", err)
+			}
+			printer.Info("Full chain saved to %s", fullchainOut)
+		}
 	}
 
 	printer.JSON(cert)

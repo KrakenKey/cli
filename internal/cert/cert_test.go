@@ -135,8 +135,16 @@ func TestRunShow_Success(t *testing.T) {
 		Fingerprint:  "AA:BB:CC",
 	}
 
+	chainInfo := api.TlsCertChainInfo{
+		LeafCert: details,
+	}
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/certs/tls/42/chain" {
+			json.NewEncoder(w).Encode(chainInfo)
+			return
+		}
 		if r.URL.Path == "/certs/tls/42/details" {
 			json.NewEncoder(w).Encode(details)
 			return
@@ -184,7 +192,7 @@ func TestRunDownload_Success(t *testing.T) {
 	client := newTestClient(srv.URL)
 	printer, out, _ := newPrinter()
 
-	err := cert.RunDownload(context.Background(), client, printer, 1, outPath)
+	err := cert.RunDownload(context.Background(), client, printer, 1, outPath, "")
 	if err != nil {
 		t.Fatalf("RunDownload: %v", err)
 	}
@@ -211,7 +219,7 @@ func TestRunDownload_NotIssued(t *testing.T) {
 	client := newTestClient(srv.URL)
 	printer, _, _ := newPrinter()
 
-	err := cert.RunDownload(context.Background(), client, printer, 1, "")
+	err := cert.RunDownload(context.Background(), client, printer, 1, "", "")
 	if err == nil {
 		t.Fatal("expected error for non-issued cert")
 	}
@@ -251,7 +259,7 @@ func TestRunDownload_DefaultFilename(t *testing.T) {
 	client := newTestClient(srv.URL)
 	printer, _, _ := newPrinter()
 
-	err = cert.RunDownload(context.Background(), client, printer, 1, "")
+	err = cert.RunDownload(context.Background(), client, printer, 1, "", "")
 	if err != nil {
 		t.Fatalf("RunDownload: %v", err)
 	}
@@ -509,6 +517,288 @@ func TestPollUntilDone_Failed(t *testing.T) {
 	// Failed is a terminal status — PollUntilDone returns it, caller decides the error.
 	if c.Status != "failed" {
 		t.Errorf("status = %q, want failed", c.Status)
+	}
+}
+
+func TestRunDownload_ChainFormat(t *testing.T) {
+	dir := t.TempDir()
+	outPath := filepath.Join(dir, "chain.pem")
+
+	chainPem := "-----BEGIN CERTIFICATE-----\nintermediate\n-----END CERTIFICATE-----\n"
+	tlsCert := api.TlsCert{
+		ID:       1,
+		Status:   "issued",
+		CrtPem:   "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n",
+		ChainPem: chainPem,
+		ParsedCsr: &api.ParsedCsr{
+			Subject: []api.CsrSubjectField{{Name: "commonName", Value: "example.com"}},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(tlsCert)
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL)
+	printer, _, _ := newPrinter()
+
+	err := cert.RunDownload(context.Background(), client, printer, 1, outPath, "chain")
+	if err != nil {
+		t.Fatalf("RunDownload chain: %v", err)
+	}
+
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read chain file: %v", err)
+	}
+	if string(data) != chainPem {
+		t.Errorf("file content = %q, want chain PEM", string(data))
+	}
+}
+
+func TestRunDownload_FullchainFormat(t *testing.T) {
+	dir := t.TempDir()
+	outPath := filepath.Join(dir, "fullchain.pem")
+
+	fullChainPem := "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nintermediate\n-----END CERTIFICATE-----\n"
+	tlsCert := api.TlsCert{
+		ID:       1,
+		Status:   "issued",
+		CrtPem:   "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n",
+		ChainPem: "-----BEGIN CERTIFICATE-----\nintermediate\n-----END CERTIFICATE-----\n",
+		ParsedCsr: &api.ParsedCsr{
+			Subject: []api.CsrSubjectField{{Name: "commonName", Value: "example.com"}},
+		},
+	}
+	chainInfo := api.TlsCertChainInfo{
+		FullChainPem: fullChainPem,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/chain") {
+			json.NewEncoder(w).Encode(chainInfo)
+			return
+		}
+		json.NewEncoder(w).Encode(tlsCert)
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL)
+	printer, _, _ := newPrinter()
+
+	err := cert.RunDownload(context.Background(), client, printer, 1, outPath, "fullchain")
+	if err != nil {
+		t.Fatalf("RunDownload fullchain: %v", err)
+	}
+
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read fullchain file: %v", err)
+	}
+	if string(data) != fullChainPem {
+		t.Errorf("file content = %q, want fullchain PEM", string(data))
+	}
+}
+
+func TestRunDownload_ChainFormat_NoChain(t *testing.T) {
+	tlsCert := api.TlsCert{
+		ID:       1,
+		Status:   "issued",
+		CrtPem:   "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n",
+		ChainPem: "",
+		ParsedCsr: &api.ParsedCsr{
+			Subject: []api.CsrSubjectField{{Name: "commonName", Value: "example.com"}},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(tlsCert)
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL)
+	printer, _, _ := newPrinter()
+
+	err := cert.RunDownload(context.Background(), client, printer, 1, "", "chain")
+	if err == nil {
+		t.Fatal("expected error for missing chain data")
+	}
+	if !strings.Contains(err.Error(), "no intermediate chain data") {
+		t.Errorf("error = %q, want to contain 'no intermediate chain data'", err.Error())
+	}
+}
+
+func TestRunDownload_InvalidFormat(t *testing.T) {
+	tlsCert := api.TlsCert{
+		ID:     1,
+		Status: "issued",
+		CrtPem: "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n",
+		ParsedCsr: &api.ParsedCsr{
+			Subject: []api.CsrSubjectField{{Name: "commonName", Value: "example.com"}},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(tlsCert)
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL)
+	printer, _, _ := newPrinter()
+
+	err := cert.RunDownload(context.Background(), client, printer, 1, "", "invalid")
+	if err == nil {
+		t.Fatal("expected error for invalid format")
+	}
+	if !strings.Contains(err.Error(), "invalid format") {
+		t.Errorf("error = %q, want to contain 'invalid format'", err.Error())
+	}
+}
+
+func TestRunDownload_ChainDefaultFilename(t *testing.T) {
+	dir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	tlsCert := api.TlsCert{
+		ID:       1,
+		Status:   "issued",
+		CrtPem:   "leaf-cert",
+		ChainPem: "chain-cert",
+		ParsedCsr: &api.ParsedCsr{
+			Subject: []api.CsrSubjectField{{Name: "commonName", Value: "mysite.com"}},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(tlsCert)
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL)
+	printer, _, _ := newPrinter()
+
+	err = cert.RunDownload(context.Background(), client, printer, 1, "", "chain")
+	if err != nil {
+		t.Fatalf("RunDownload: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "mysite.com.chain.crt")); err != nil {
+		t.Errorf("expected default chain file mysite.com.chain.crt: %v", err)
+	}
+}
+
+func TestRunDownload_FullchainDefaultFilename(t *testing.T) {
+	dir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	fullChainPem := "leaf+intermediate"
+	tlsCert := api.TlsCert{
+		ID:     1,
+		Status: "issued",
+		CrtPem: "leaf",
+		ParsedCsr: &api.ParsedCsr{
+			Subject: []api.CsrSubjectField{{Name: "commonName", Value: "mysite.com"}},
+		},
+	}
+	chainInfo := api.TlsCertChainInfo{FullChainPem: fullChainPem}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/chain") {
+			json.NewEncoder(w).Encode(chainInfo)
+			return
+		}
+		json.NewEncoder(w).Encode(tlsCert)
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL)
+	printer, _, _ := newPrinter()
+
+	err = cert.RunDownload(context.Background(), client, printer, 1, "", "fullchain")
+	if err != nil {
+		t.Fatalf("RunDownload: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "mysite.com.fullchain.crt")); err != nil {
+		t.Errorf("expected default fullchain file mysite.com.fullchain.crt: %v", err)
+	}
+}
+
+func TestRunShow_WithIntermediates(t *testing.T) {
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	exp := now.Add(90 * 24 * time.Hour)
+	tlsCert := api.TlsCert{
+		ID:        42,
+		Status:    "issued",
+		ExpiresAt: &exp,
+		AutoRenew: true,
+		CreatedAt: now,
+		ParsedCsr: &api.ParsedCsr{
+			Subject:   []api.CsrSubjectField{{Name: "commonName", Value: "example.com"}},
+			PublicKey: &api.CsrPublicKey{KeyType: "ECDSA", BitLength: 256},
+		},
+	}
+	chainInfo := api.TlsCertChainInfo{
+		LeafCert: api.TlsCertDetails{
+			SerialNumber: "LEAF01",
+			Issuer:       "Let's Encrypt R11",
+			ValidFrom:    now,
+			ValidTo:      exp,
+			Fingerprint:  "LEAF:FP",
+		},
+		Intermediates: []api.TlsCertChainEntry{
+			{
+				Subject:     "CN=R11",
+				Issuer:      "CN=ISRG Root X1",
+				Fingerprint: "INT:FP:01",
+			},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/chain") {
+			json.NewEncoder(w).Encode(chainInfo)
+			return
+		}
+		json.NewEncoder(w).Encode(tlsCert)
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL)
+	printer, out, _ := newPrinter()
+
+	err := cert.RunShow(context.Background(), client, printer, 42)
+	if err != nil {
+		t.Fatalf("RunShow: %v", err)
+	}
+
+	got := out.String()
+	for _, want := range []string{"1 intermediate", "CN=R11", "CN=ISRG Root X1", "INT:FP:01"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output missing %q:\n%s", want, got)
+		}
 	}
 }
 

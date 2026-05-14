@@ -174,6 +174,14 @@ func (c *Client) GetCertDetails(ctx context.Context, id int) (*TlsCertDetails, e
 	return &details, nil
 }
 
+func (c *Client) GetCertChain(ctx context.Context, id int) (*TlsCertChainInfo, error) {
+	var chain TlsCertChainInfo
+	if err := c.do(ctx, http.MethodGet, "/certs/tls/"+strconv.Itoa(id)+"/chain", nil, &chain); err != nil {
+		return nil, err
+	}
+	return &chain, nil
+}
+
 func (c *Client) UpdateCert(ctx context.Context, id int, autoRenew *bool) (*TlsCert, error) {
 	body := map[string]any{"autoRenew": autoRenew}
 	var cert TlsCert
