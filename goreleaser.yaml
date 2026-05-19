@@ -35,43 +35,15 @@ archives:
       - LICENSE
       - README.md
 
-dockers:
-  - image_templates:
-      - "ghcr.io/krakenkey/cli:{{ .Version }}-amd64"
-      - "ghcr.io/krakenkey/cli:latest-amd64"
+dockers_v2:
+  - images:
+      - "ghcr.io/krakenkey/cli"
     dockerfile: Dockerfile.goreleaser
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/amd64"
-    goos: linux
-    goarch: amd64
-  - image_templates:
-      - "ghcr.io/krakenkey/cli:{{ .Version }}-arm64"
-      - "ghcr.io/krakenkey/cli:latest-arm64"
-    dockerfile: Dockerfile.goreleaser
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/arm64"
-    goos: linux
-    goarch: arm64
-
-docker_manifests:
-  - name_template: "ghcr.io/krakenkey/cli:{{ .Version }}"
-    image_templates:
-      - "ghcr.io/krakenkey/cli:{{ .Version }}-amd64"
-      - "ghcr.io/krakenkey/cli:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/krakenkey/cli:{{ .Major }}.{{ .Minor }}"
-    image_templates:
-      - "ghcr.io/krakenkey/cli:{{ .Version }}-amd64"
-      - "ghcr.io/krakenkey/cli:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/krakenkey/cli:{{ .Major }}"
-    image_templates:
-      - "ghcr.io/krakenkey/cli:{{ .Version }}-amd64"
-      - "ghcr.io/krakenkey/cli:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/krakenkey/cli:latest"
-    image_templates:
-      - "ghcr.io/krakenkey/cli:latest-amd64"
-      - "ghcr.io/krakenkey/cli:latest-arm64"
+    tags:
+      - "v{{ .Version }}"
+      - "{{ .Major }}.{{ .Minor }}"
+      - "{{ .Major }}"
+      - "{{ if not .IsSnapshot }}latest{{ end }}"
 
 checksum:
   name_template: checksums.txt
