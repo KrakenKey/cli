@@ -6,6 +6,10 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Changed
+- Docker images are now published as unified multi-arch images via goreleaser `dockers_v2`. The image `ghcr.io/krakenkey/cli` is available with tags `v<version>`, `<major>.<minor>`, `<major>`, and `latest` — all supporting both `linux/amd64` and `linux/arm64` via an OCI image index. Previously, separate per-architecture images were published with a separate manifest-merge step.
+- GitHub Actions updated: `docker/setup-qemu-action` v3→v4, `docker/setup-buildx-action` v3→v4, `docker/login-action` v3→v4, `goreleaser/goreleaser-action` v6→v7.
+
 ---
 
 ## [v0.2.0] — 2026-05-14
