@@ -6,6 +6,13 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Build and Release
+
+- Docker images migrated from legacy `dockers` + `docker_manifests` to `dockers_v2` (PR #14). Images are now published as a single OCI image index serving both `linux/amd64` and `linux/arm64` natively. Tags: `v<major>.<minor>.<patch>`, `v<major>.<minor>`, `v<major>`, `latest`. Old per-architecture image tags are no longer published.
+- GitHub Actions bumped: `docker/setup-qemu-action` v3→v4, `docker/setup-buildx-action` v3→v4, `docker/login-action` v3→v4, `goreleaser/goreleaser-action` v6→v7 (PR #13). No user-facing behavior change.
+
+> Next functional release: `v0.3.0`.
+
 ---
 
 ## [v0.2.0] — 2026-05-14
