@@ -6,6 +6,13 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Changed
+
+- Docker image registry migrated from `docker.io/krakenkey/cli` to `ghcr.io/krakenkey/cli`. Update any `docker pull` commands or Kubernetes image references accordingly. (PR #14)
+- GitHub Actions dependency versions bumped across CI workflows. (PR #13)
+
+> Next release: **v0.3.0** — registry migration is a user-visible change (pull URLs change).
+
 ---
 
 ## [v0.2.0] — 2026-05-14
