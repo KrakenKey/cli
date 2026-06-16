@@ -6,6 +6,18 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Changed
+- Docker images migrated to GitHub Container Registry (`ghcr.io/krakenkey/cli`). The `docker.io/krakenkey/cli` image is no longer updated. Pull with `docker pull ghcr.io/krakenkey/cli:latest`. (PR #14)
+- Multi-platform images now use the GoReleaser `dockers_v2` format — a single OCI image index serves both `amd64` and `arm64` architectures. Per-architecture tags (e.g., `v0.2.0-amd64`) are no longer published.
+- Version tags published on each release: `vMAJOR.MINOR.PATCH`, `vMAJOR.MINOR`, `vMAJOR`, and `latest`.
+
+### Build
+- GitHub Actions bumped: `docker/setup-qemu-action` v3→v4, `docker/setup-buildx-action` v3→v4, `docker/login-action` v3→v4, `goreleaser/goreleaser-action` v6→v7. (PR #13)
+
+### Suggested next release
+
+**v0.3.0** — minor: Docker registry migration is a user-visible change (pull URL changes from `docker.io` to `ghcr.io`).
+
 ---
 
 ## [v0.2.0] — 2026-05-14
