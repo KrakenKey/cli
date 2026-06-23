@@ -6,6 +6,12 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Changed
+- **Docker registry migration** (PR #14): container images now published to `ghcr.io/krakenkey/cli` (was `docker.io`). Manifest format changed to `docker_v2` (single OCI image index serving both amd64 and arm64); separate per-architecture tags no longer published. Pull with `docker pull ghcr.io/krakenkey/cli:latest`.
+- **GHA version bumps** (PR #13): `docker/setup-qemu-action` v3→v4, `docker/setup-buildx-action` v3→v4, `docker/login-action` v3→v4, `goreleaser/goreleaser-action` v6→v7.
+
+> Next release: **v0.3.0** — the registry URL change is user-visible for anyone pulling images by the old `docker.io` path.
+
 ---
 
 ## [v0.2.0] — 2026-05-14
