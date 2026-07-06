@@ -1,18 +1,23 @@
 // Package config handles loading and saving CLI configuration.
 // Precedence (highest to lowest): CLI flags > env vars > config file > defaults.
 // Config file: ~/.config/krakenkey/config.yaml (XDG_CONFIG_HOME respected).
-// File permissions: 0600. Broader permissions trigger a warning.
+// File permissions: 0600. Broader permissions cause an error on load.
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"gopkg.in/yaml.v3"
 )
 
 const defaultAPIURL = "https://api.krakenkey.io"
+
+// ErrInsecurePermissions indicates the config file is readable by other users.
+var ErrInsecurePermissions = errors.New("config file has insecure permissions")
 
 // Config holds the resolved configuration for a CLI invocation.
 type Config struct {
@@ -45,7 +50,11 @@ func Load(flags Flags) (*Config, error) {
 	}
 
 	// Layer 1: config file (lowest priority after defaults)
-	if fc, err := loadFile(); err == nil {
+	fc, err := loadFile()
+	if err != nil && errors.Is(err, ErrInsecurePermissions) {
+		return nil, err
+	}
+	if err == nil {
 		if fc.APIURL != "" {
 			cfg.APIURL = fc.APIURL
 		}
@@ -91,7 +100,11 @@ func Save(apiURL, apiKey, output string) error {
 	}
 
 	existing := &fileConfig{}
-	if fc, err := loadFile(); err == nil {
+	fc, err := loadFile()
+	if err != nil && errors.Is(err, ErrInsecurePermissions) {
+		return err
+	}
+	if err == nil {
 		existing = fc
 	}
 	if apiURL != "" {
@@ -156,9 +169,9 @@ func loadFile() (*fileConfig, error) {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 	info, err := os.Stat(path)
-	if err == nil && info.Mode().Perm()&0o077 != 0 {
-		fmt.Fprintf(os.Stderr, "warning: config file %s has broad permissions (%s), consider chmod 600\n",
-			path, info.Mode().Perm())
+	if err == nil && runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
+		return nil, fmt.Errorf("%w: %s (%s); run: chmod 600 %s",
+			ErrInsecurePermissions, path, info.Mode().Perm(), path)
 	}
 	return &fc, nil
 }
