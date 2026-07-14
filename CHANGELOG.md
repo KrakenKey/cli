@@ -6,6 +6,10 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Changed
+- Container images migrated from `docker.io/krakenkey/cli` to `ghcr.io/krakenkey/cli`; manifest format changed to `docker_v2`. Update any `docker pull` commands or image references accordingly. (PR #14)
+- CI: `docker/setup-qemu-action` v3 → v4, `docker/setup-buildx-action` v3 → v4, `docker/login-action` v3 → v4, `goreleaser/goreleaser-action` v6 → v7. (PR #13)
+
 ---
 
 ## [v0.2.0] — 2026-05-14
