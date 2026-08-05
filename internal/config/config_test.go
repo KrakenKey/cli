@@ -1,8 +1,10 @@
 package config_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/krakenkey/cli/internal/config"
@@ -177,5 +179,31 @@ func TestConfigDir_RespectsXDG(t *testing.T) {
 	dir := config.ConfigDir()
 	if dir != "/tmp/xdg-test/krakenkey" {
 		t.Errorf("ConfigDir = %q, want /tmp/xdg-test/krakenkey", dir)
+	}
+}
+
+func TestLoad_InsecurePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file permission bits are not enforced on windows")
+	}
+	dir := withTempConfigDir(t)
+	cfgDir := filepath.Join(dir, "krakenkey")
+	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(cfgDir, "config.yaml")
+	if err := os.WriteFile(path, []byte("api_key: kk_test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// WriteFile mode is subject to umask; force the broad permissions.
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KK_API_URL", "")
+	t.Setenv("KK_API_KEY", "")
+	t.Setenv("KK_OUTPUT", "")
+
+	if _, err := config.Load(config.Flags{}); !errors.Is(err, config.ErrInsecurePermissions) {
+		t.Fatalf("Load error = %v, want ErrInsecurePermissions", err)
 	}
 }
