@@ -6,6 +6,9 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Changed
+- Config file with permissions broader than `0600` (readable or writable by group/other) now causes `krakenkey` to refuse to load it and exit with a configuration error, instead of printing a warning and continuing. Not enforced on Windows. Fix with `chmod 600 ~/.config/krakenkey/config.yaml`. (#22)
+
 ---
 
 ## [v0.2.0] — 2026-05-14

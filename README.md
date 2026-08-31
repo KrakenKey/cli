@@ -197,6 +197,12 @@ output: "text"
 | API key | `--api-key` | `KK_API_KEY` |
 | Output format | `--output` | `KK_OUTPUT` |
 
+**Permissions**: on non-Windows systems, the CLI refuses to load a config file with permissions broader than `0600` (readable or writable by group/other) and exits with a configuration error (exit code 5) instead of loading it. Fix with:
+
+```bash
+chmod 600 ~/.config/krakenkey/config.yaml
+```
+
 ## Certificate chain
 
 `cert issue` and `cert submit` produce three output files alongside the private key:
