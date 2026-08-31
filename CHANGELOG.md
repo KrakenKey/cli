@@ -8,6 +8,20 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ### Changed
 - Config file with permissions broader than `0600` (readable or writable by group/other) now causes `krakenkey` to refuse to load it and exit with a configuration error, instead of printing a warning and continuing. Not enforced on Windows. Fix with `chmod 600 ~/.config/krakenkey/config.yaml`. (#22)
+- Docker images migrated to GitHub Container Registry (`ghcr.io/krakenkey/cli`). The `docker.io/krakenkey/cli` image is no longer updated. Pull with `docker pull ghcr.io/krakenkey/cli:latest`. (#14)
+- Multi-platform images now use the GoReleaser `dockers_v2` format — a single OCI image index serves both `amd64` and `arm64` architectures. Per-architecture tags (e.g., `v0.2.0-amd64`) are no longer published. (#14)
+- Version tags published on each release: `vMAJOR.MINOR.PATCH`, `vMAJOR.MINOR`, `vMAJOR`, and `latest`. (#14)
+
+---
+
+## [v0.3.0] — 2026-05-19
+
+### Added
+- **Certificate chain** documentation: cert chain flags and certificate chain section in README. (#11)
+- This CHANGELOG. (#12)
+
+### Build
+- GitHub Actions bumped: `docker/setup-qemu-action` v3→v4, `docker/setup-buildx-action` v3→v4, `docker/login-action` v3→v4, `goreleaser/goreleaser-action` v6→v7. (#13)
 
 ---
 
