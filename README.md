@@ -225,6 +225,27 @@ krakenkey cert download 42 --format fullchain --out ./fullchain.pem
 krakenkey cert download 42 --format chain --out ./chain.pem
 ```
 
+### Do not rely on AIA chain repair
+
+If a server presents only the leaf certificate, some clients repair the chain by fetching the issuing intermediate from the leaf's `authorityInformationAccess` (AIA) `caIssuers` URL — and some never do:
+
+| Behavior | Clients |
+|----------|---------|
+| Fetches AIA | Windows CryptoAPI/Schannel, macOS Security.framework, Chrome's built-in verifier |
+| Never fetches AIA | OpenSSL, Go `crypto/x509`, Firefox, Java PKIX unless `com.sun.security.enableAIAcaIssuers=true` |
+
+This CLI is in the second group: it is written in Go, so `crypto/x509` will not fetch AIA for you. An incomplete chain that loads fine in a desktop browser fails here, in `curl`, and in CI:
+
+```
+error 20 at 0 depth lookup: unable to get local issuer certificate
+```
+
+Deploy `--fullchain-out` rather than `--out` and the question does not arise. This matters more going forward: CA/Browser Forum ballot SC104 (passed 2026-09-03) relaxed the AIA extension from MUST to SHOULD in subscriber certificates, so compliant leaves may eventually carry no `caIssuers` URL at all and chain repair becomes unavailable in every client. Verify deployments with a client that does not fetch AIA:
+
+```bash
+openssl verify -CAfile /path/to/root.pem -untrusted ./example.com.chain.pem ./example.com.crt
+```
+
 ## Output formats
 
 **Text** (default): colored, human-readable output with aligned tables and spinners.
