@@ -40,12 +40,17 @@ docker pull ghcr.io/krakenkey/cli:latest
 krakenkey auth login
 
 # 2. Register and verify your domain
-krakenkey domain add example.com
+krakenkey domain add example.com   # prints the TXT record to create
 krakenkey domain verify <id>
 
-# 3. Issue a certificate
+# 3. Delegate ACME challenges (one-time, at your DNS provider)
+#    _acme-challenge.example.com.  CNAME  example-com.acme.krakenkey.io.
+
+# 4. Issue a certificate
 krakenkey cert issue --domain example.com
 ```
+
+Step 3 is a separate record from the ownership TXT in step 2, and it is not optional: KrakenKey answers the ACME DNS-01 challenge in its own zone, so without the CNAME the CA cannot see the challenge response. Issuance checks the delegation before contacting the CA and fails immediately if it is missing or points elsewhere — see [Troubleshooting](#troubleshooting). `krakenkey domain show <id>` prints both records for a registered domain.
 
 ## Command reference
 
@@ -300,12 +305,36 @@ The CLI generates CSRs using Go's `crypto` standard library. Supported key types
 
 Private keys are saved locally with `0600` permissions. They are never sent to the API or printed to stdout.
 
+## Troubleshooting
+
+### `ACME challenge delegation missing` / `... mismatch`
+
+```
+ACME challenge delegation missing: no CNAME found at _acme-challenge.example.com.
+Create a CNAME record from _acme-challenge.example.com to example-com.acme.krakenkey.io,
+then request the certificate again.
+```
+
+Issuance verifies the `_acme-challenge` CNAME before creating an ACME order, so this fails in seconds rather than after the usual few minutes. The target is your domain with dots replaced by dashes, under the KrakenKey auth zone:
+
+| Domain | CNAME at | Target |
+|--------|----------|--------|
+| `example.com` | `_acme-challenge.example.com` | `example-com.acme.krakenkey.io` |
+| `api.example.com` | `_acme-challenge.api.example.com` | `api-example-com.acme.krakenkey.io` |
+| `*.example.com` | `_acme-challenge.example.com` | `example-com.acme.krakenkey.io` |
+
+A wildcard uses the base domain's record — `*.example.com` and `example.com` share one `_acme-challenge` name. `krakenkey domain show <id>` prints the exact record.
+
+If you have just created the record, allow a few minutes for it to propagate and retry. The check follows CNAME chains, so pointing `_acme-challenge` at another name that ultimately resolves to the target also works.
+
+This is a permanent failure: retrying without changing DNS produces the same result. See [Exit codes](#exit-codes) — the CLI exits `1`.
+
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | 0 | Success |
-| 1 | General error (API error, validation failure, issuance failed) |
+| 1 | General error (API error, validation failure, issuance failed — including a missing challenge delegation) |
 | 2 | Authentication error (no API key, 401) |
 | 3 | Not found (404) |
 | 4 | Rate limited (429) |

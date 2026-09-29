@@ -7,6 +7,7 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 ## [Unreleased]
 
 ### Documentation
+- **ACME challenge delegation**: the quick start omitted the one-time `_acme-challenge` CNAME, which is required for issuance and is a separate record from the ownership TXT. Added it as an explicit step, plus a Troubleshooting section for the `ACME challenge delegation missing` / `mismatch` errors the API now returns before contacting the CA — including the dots-to-dashes target format, the wildcard rule, and that these are permanent failures rather than something a retry fixes.
 - **Certificate chain**: new "Do not rely on AIA chain repair" subsection in README — which clients fetch the AIA `caIssuers` URL and which never do, why this CLI is in the second group (Go's `crypto/x509` does not fetch AIA), and how to verify a deployment with `openssl verify -untrusted`.
 
 ### Advisory
