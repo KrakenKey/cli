@@ -344,6 +344,36 @@ func runDomain(ctx context.Context, client *api.Client, printer *output.Printer,
 		}
 		return domain.RunVerify(ctx, client, printer, fs.Arg(0))
 
+	case "check":
+		fs := flag.NewFlagSet("domain check", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		var (
+			resolver     string
+			wait         bool
+			pollInterval = 30 * time.Second
+			pollTimeout  = 15 * time.Minute
+		)
+		fs.StringVar(&resolver, "resolver", "", "DNS server to query, e.g. 1.1.1.1 (default: system resolver)")
+		fs.BoolVar(&wait, "wait", false, "Wait until every record is in place")
+		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to re-check")
+		fs.DurationVar(&pollTimeout, "poll-timeout", pollTimeout, "Maximum time to wait")
+		fs.Usage = func() {
+			fmt.Fprint(os.Stderr, "Usage: krakenkey domain check <name> [<name>...] [--resolver ip] [--wait]\n")
+		}
+		if err := fs.Parse(subArgs); err != nil {
+			return err
+		}
+		if fs.NArg() == 0 {
+			return &api.ErrConfig{Message: "at least one certificate name is required"}
+		}
+		return domain.RunCheck(ctx, client, printer, domain.CheckOptions{
+			Names:        fs.Args(),
+			Resolver:     domain.NewResolver(resolver),
+			Wait:         wait,
+			PollInterval: pollInterval,
+			PollTimeout:  pollTimeout,
+		})
+
 	case "delete":
 		fs := flag.NewFlagSet("domain delete", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -882,15 +912,16 @@ Usage:
   krakenkey domain <subcommand> [flags]
 
 Subcommands:
-  add <hostname>    Register a domain and get the DNS TXT record
-  list              List all registered domains
-  show <id>         Show domain details
-  verify <id>       Trigger DNS TXT verification
-  delete <id>       Delete a domain
+  add <hostname>      Register a domain and print the DNS records it needs
+  list                List all registered domains
+  show <id>           Show domain details
+  check <name>...     Check the TXT and _acme-challenge CNAME records for certificate names
+  verify <id>         Trigger DNS TXT verification
+  delete <id>         Delete a domain
 
 Examples:
   krakenkey domain add example.com
-  krakenkey domain list
+  krakenkey domain check example.com www.example.com --wait
   krakenkey domain verify <id>
 `
 
