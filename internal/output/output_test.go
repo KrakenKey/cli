@@ -78,6 +78,15 @@ func TestPrinter_JSONMode_JSON(t *testing.T) {
 	}
 }
 
+func TestPrinter_TextMode_JSONSuppressed(t *testing.T) {
+	out := &bytes.Buffer{}
+	p := output.NewWithWriters("text", true, out, &bytes.Buffer{})
+	p.JSON(map[string]string{"name": "alice"})
+	if out.Len() != 0 {
+		t.Errorf("JSON wrote output in text mode: %q", out.String())
+	}
+}
+
 func TestPrinter_JSONMode_Error_WritesJSONToStderr(t *testing.T) {
 	p, _, errOut := newPrinter("json")
 	p.Error("oops %s", "bad")
