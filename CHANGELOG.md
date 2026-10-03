@@ -6,6 +6,12 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Added
+- `krakenkey auth login --web` signs in through the dashboard instead of a pasted key. It prints a link and a short code (and opens the browser unless `--no-browser`); approving in the dashboard creates an API key named `CLI login: <hostname>`, which the CLI saves. Requires an API with device login (KrakenKey/app#117).
+
+### Changed
+- Requests made without an API key no longer send an empty `Authorization: Bearer` header.
+
 ---
 
 ## [v0.5.0] — 2026-10-03

@@ -205,11 +205,36 @@ func runAuth(ctx context.Context, client *api.Client, printer *output.Printer, c
 	case "login":
 		fs := flag.NewFlagSet("auth login", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
-		var key string
+		var (
+			key       string
+			web       bool
+			noBrowser bool
+		)
 		fs.StringVar(&key, "api-key", "", "API key to save")
-		fs.Usage = func() { fmt.Fprint(os.Stderr, "Usage: krakenkey auth login [--api-key <key>]\n") }
+		fs.BoolVar(&web, "web", false, "Sign in through the dashboard in a browser instead of pasting a key")
+		fs.BoolVar(&noBrowser, "no-browser", false, "With --web, print the link without trying to open a browser")
+		fs.Usage = func() {
+			fmt.Fprint(os.Stderr, "Usage: krakenkey auth login [--api-key <key> | --web [--no-browser]]\n")
+		}
 		if err := fs.Parse(subArgs); err != nil {
 			return err
+		}
+		if web {
+			if key != "" {
+				return &api.ErrConfig{Message: "use either --api-key or --web, not both"}
+			}
+			anon := api.NewClient(cfg.APIURL, "", version, runtime.GOOS, runtime.GOARCH)
+			tok, err := auth.RunWebLogin(ctx, anon, auth.WebLoginOptions{OpenBrowser: !noBrowser})
+			if err != nil {
+				return err
+			}
+			webClient := api.NewClient(cfg.APIURL, tok.APIKey, version, runtime.GOOS, runtime.GOARCH)
+			if err := auth.RunLogin(ctx, webClient, printer, tok.APIKey); err != nil {
+				return err
+			}
+			printer.JSON(map[string]string{"keyId": tok.ID, "keyName": tok.Name})
+			printer.Info("Created API key %q; revoke it with `krakenkey auth keys delete %s`", tok.Name, tok.ID)
+			return nil
 		}
 		if key == "" {
 			fmt.Fprint(os.Stderr, "Enter API key: ")
@@ -892,7 +917,7 @@ Usage:
   krakenkey auth <subcommand> [flags]
 
 Subcommands:
-  login             Save an API key to the config file
+  login             Save an API key to the config file (--web: approve in a browser)
   logout            Remove the stored API key
   status            Show current user and resource counts
   keys list         List API keys
@@ -900,6 +925,7 @@ Subcommands:
   keys delete       Delete an API key
 
 Examples:
+  krakenkey auth login --web
   krakenkey auth login --api-key kk_...
   krakenkey auth status
   krakenkey auth keys create --name ci-deploy

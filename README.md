@@ -36,8 +36,8 @@ docker pull ghcr.io/krakenkey/cli:latest
 ## Quick start
 
 ```bash
-# 1. Set your API key (create one at app.krakenkey.io/dashboard → API Keys)
-krakenkey auth login
+# 1. Sign in: approve the login in your browser (or paste a key with `auth login`)
+krakenkey auth login --web
 
 # 2. Register your domain, add the DNS records it prints, then verify
 krakenkey domain add example.com
@@ -54,12 +54,15 @@ krakenkey cert issue --domain example.com
 
 ```
 krakenkey auth login [--api-key <key>]        Save API key (prompts interactively if omitted)
+krakenkey auth login --web [--no-browser]     Approve a login in the dashboard; creates and saves a new API key
 krakenkey auth logout                         Remove stored API key
 krakenkey auth status                         Show auth status and resource counts
 krakenkey auth keys list                      List API keys
 krakenkey auth keys create --name <name>      Create a new API key
 krakenkey auth keys delete <id>               Delete an API key
 ```
+
+`auth login --web` prints a link to `app.krakenkey.io/device` and a short code, opens the link in your browser (unless `--no-browser`), and waits up to 10 minutes. Sign in, check the code matches, and click **Approve**: the dashboard creates an API key named `CLI login: <hostname>` and the CLI saves it to the config file. Instructions go to stderr, so `--output json` stdout carries only `{"keyId", "keyName"}`. Revoke the key like any other with `auth keys delete`.
 
 `auth keys create` flags:
 

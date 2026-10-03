@@ -212,6 +212,34 @@ func (e *APIError) Error() string { return e.Message }
 
 // Typed errors allow main.go to map errors to specific exit codes.
 
+// DeviceCode is returned when a browser login starts.
+type DeviceCode struct {
+	DeviceCode              string `json:"deviceCode"`
+	UserCode                string `json:"userCode"`
+	VerificationURI         string `json:"verificationUri"`
+	VerificationURIComplete string `json:"verificationUriComplete"`
+	ExpiresIn               int    `json:"expiresIn"`
+	Interval                int    `json:"interval"`
+}
+
+// Device login poll statuses.
+const (
+	DeviceStatusPending  = "pending"
+	DeviceStatusSlowDown = "slow_down"
+	DeviceStatusApproved = "approved"
+	DeviceStatusDenied   = "denied"
+	DeviceStatusExpired  = "expired"
+)
+
+// DeviceToken is the result of polling a browser login. APIKey, ID and
+// Name are set only when Status is approved.
+type DeviceToken struct {
+	Status string `json:"status"`
+	APIKey string `json:"apiKey,omitempty"`
+	ID     string `json:"id,omitempty"`
+	Name   string `json:"name,omitempty"`
+}
+
 // ErrAuth indicates an authentication failure (HTTP 401).
 type ErrAuth struct{ Message string }
 
