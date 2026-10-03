@@ -279,3 +279,33 @@ func TestRunSubmit_IssuanceFailed(t *testing.T) {
 		t.Errorf("error = %q, want to contain 'failed'", err.Error())
 	}
 }
+
+func TestRunSubmit_IssuanceFailedIncludesReason(t *testing.T) {
+	dir := t.TempDir()
+	csrPath := writeCSRFile(t, dir, "test.csr")
+	reason := "ACME challenge delegation missing: no CNAME found at _acme-challenge.example.com."
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method {
+		case http.MethodPost:
+			json.NewEncoder(w).Encode(api.CertResponse{ID: 21, Status: "pending"})
+		case http.MethodGet:
+			json.NewEncoder(w).Encode(api.TlsCert{ID: 21, Status: "failed", FailureReason: reason})
+		}
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL)
+	printer, _, _ := newPrinter()
+
+	err := cert.RunSubmit(context.Background(), client, printer, cert.SubmitOptions{
+		CSRPath:      csrPath,
+		Wait:         true,
+		PollInterval: 50 * time.Millisecond,
+		PollTimeout:  2 * time.Second,
+	})
+	if err == nil || !strings.HasSuffix(err.Error(), ": "+reason) {
+		t.Fatalf("error = %v, want it to end with the failure reason", err)
+	}
+}
