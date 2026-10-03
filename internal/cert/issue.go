@@ -114,7 +114,7 @@ func RunIssue(ctx context.Context, client *api.Client, printer *output.Printer, 
 	}
 
 	if cert.Status == api.CertStatusFailed {
-		return fmt.Errorf("certificate issuance failed for %s", opts.Domain)
+		return failedError(cert, "certificate issuance failed for %s", opts.Domain)
 	}
 
 	if cert.CrtPem != "" {

@@ -9,6 +9,7 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 ### Added
 - `krakenkey domain check <name>...` checks the DNS records for the names on a certificate: one `_acme-challenge` CNAME per name and, with a working API key, the ownership TXT. Reports `ok`, `missing`, `wrong` or `conflict` per record, exits 1 until all are in place, and `--wait` re-checks until they are. `--resolver` queries a specific DNS server.
 - `KK_ACME_ZONE` overrides the challenge delegation zone (default `acme.krakenkey.io`).
+- `cert show` prints the failure reason for failed certificates, and `cert issue`, `submit`, `renew` and `retry` with `--wait` include it in their error, e.g. a missing `_acme-challenge` CNAME. Requires an API that returns `failureReason`; older APIs keep the previous messages.
 
 ### Changed
 - `domain add` now prints the `_acme-challenge` CNAME alongside the TXT record, and its JSON output gains a `dnsRecords` array. Issuance has required the CNAME since the API started checking delegation before each order.

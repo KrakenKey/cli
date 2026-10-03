@@ -56,7 +56,7 @@ func RunSubmit(ctx context.Context, client *api.Client, printer *output.Printer,
 	}
 
 	if cert.Status == api.CertStatusFailed {
-		return fmt.Errorf("certificate issuance failed")
+		return failedError(cert, "certificate issuance failed")
 	}
 
 	certOut := opts.Out

@@ -3,6 +3,7 @@ package cert
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -90,6 +91,10 @@ func RunShow(ctx context.Context, client *api.Client, printer *output.Printer, i
 	}
 	if c.RenewalCount > 0 {
 		printer.Println("Renewals:    %d", c.RenewalCount)
+	}
+
+	if c.Status == api.CertStatusFailed && c.FailureReason != "" {
+		printer.Println("Reason:      %s", c.FailureReason)
 	}
 
 	if c.ParsedCsr != nil && c.ParsedCsr.PublicKey != nil {
@@ -223,7 +228,7 @@ func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, 
 		return err
 	}
 	if cert.Status == api.CertStatusFailed {
-		return fmt.Errorf("renewal failed for certificate %d", id)
+		return failedError(cert, "renewal failed for certificate %d", id)
 	}
 	printer.Success("Certificate %d renewed", id)
 	return nil
@@ -258,7 +263,7 @@ func RunRetry(ctx context.Context, client *api.Client, printer *output.Printer, 
 		return err
 	}
 	if cert.Status == api.CertStatusFailed {
-		return fmt.Errorf("certificate %d issuance failed after retry", id)
+		return failedError(cert, "certificate %d issuance failed after retry", id)
 	}
 	printer.Success("Certificate %d issued", id)
 	return nil
@@ -285,6 +290,16 @@ func RunUpdate(ctx context.Context, client *api.Client, printer *output.Printer,
 		printer.Println("Auto-renew: %v", c.AutoRenew)
 	}
 	return nil
+}
+
+// failedError builds the error for a certificate that ended in "failed",
+// appending the API's failure reason when it returns one.
+func failedError(c *api.TlsCert, format string, args ...any) error {
+	msg := fmt.Sprintf(format, args...)
+	if c.FailureReason != "" {
+		msg += ": " + c.FailureReason
+	}
+	return errors.New(msg)
 }
 
 // PollUntilDone polls GET /certs/:id until the cert reaches a terminal state
