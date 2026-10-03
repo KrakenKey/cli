@@ -50,7 +50,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	if err != nil {
 		return &ErrNetwork{Message: fmt.Sprintf("build request: %s", err)}
 	}
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
 	req.Header.Set("User-Agent", c.userAgent)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -355,4 +357,28 @@ func (c *Client) GetSubscription(ctx context.Context) (*Subscription, error) {
 		return nil, err
 	}
 	return &s, nil
+}
+
+// Device login methods (krakenkey auth login --web). Both are
+// unauthenticated; use a client without an API key.
+
+func (c *Client) StartDeviceLogin(ctx context.Context, clientName string) (*DeviceCode, error) {
+	body := map[string]string{}
+	if clientName != "" {
+		body["clientName"] = clientName
+	}
+	var dc DeviceCode
+	if err := c.do(ctx, http.MethodPost, "/auth/device/code", body, &dc); err != nil {
+		return nil, err
+	}
+	return &dc, nil
+}
+
+func (c *Client) PollDeviceLogin(ctx context.Context, deviceCode string) (*DeviceToken, error) {
+	body := map[string]string{"deviceCode": deviceCode}
+	var t DeviceToken
+	if err := c.do(ctx, http.MethodPost, "/auth/device/token", body, &t); err != nil {
+		return nil, err
+	}
+	return &t, nil
 }
