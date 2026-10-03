@@ -6,6 +6,9 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Fixed
+- Text output no longer prints the raw JSON response above the human-readable output. JSON is written only with `--output json` / `KK_OUTPUT=json`.
+
 ---
 
 ## [v0.4.0] — 2026-09-04
