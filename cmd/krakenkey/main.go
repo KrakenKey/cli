@@ -233,7 +233,7 @@ func runAuth(ctx context.Context, client *api.Client, printer *output.Printer, c
 				return err
 			}
 			printer.JSON(map[string]string{"keyId": tok.ID, "keyName": tok.Name})
-			printer.Info("Created API key %q; revoke it with `krakenkey auth keys delete %s`", tok.Name, tok.ID)
+			printer.Info("Created API key %q; revoke it under API Keys in the dashboard", tok.Name)
 			return nil
 		}
 		if key == "" {
@@ -921,15 +921,18 @@ Subcommands:
   logout            Remove the stored API key
   status            Show current user and resource counts
   keys list         List API keys
-  keys create       Create a new API key
-  keys delete       Delete an API key
+  keys create       Create a new API key (needs a dashboard session)
+  keys delete       Delete an API key (needs a dashboard session)
+
+The API refuses keys create and keys delete when called with an API key,
+which is all the CLI has. To get a key, run auth login --web and approve it
+in the dashboard. To revoke one, use API Keys in the dashboard.
 
 Examples:
   krakenkey auth login --web
   krakenkey auth login --api-key kk_...
   krakenkey auth status
-  krakenkey auth keys create --name ci-deploy
-  krakenkey auth keys delete <id>
+  krakenkey auth keys list
 `
 
 const domainUsage = `Register and verify domains.

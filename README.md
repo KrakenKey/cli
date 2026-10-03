@@ -58,11 +58,13 @@ krakenkey auth login --web [--no-browser]     Approve a login in the dashboard; 
 krakenkey auth logout                         Remove stored API key
 krakenkey auth status                         Show auth status and resource counts
 krakenkey auth keys list                      List API keys
-krakenkey auth keys create --name <name>      Create a new API key
-krakenkey auth keys delete <id>               Delete an API key
+krakenkey auth keys create --name <name>      Create a new API key (dashboard session only)
+krakenkey auth keys delete <id>               Delete an API key (dashboard session only)
 ```
 
-`auth login --web` prints a link to `app.krakenkey.io/device` and a short code, opens the link in your browser (unless `--no-browser`), and waits up to 10 minutes. Sign in, check the code matches, and click **Approve**: the dashboard creates an API key named `CLI login: <hostname>` and the CLI saves it to the config file. Instructions go to stderr, so `--output json` stdout carries only `{"keyId", "keyName"}`. Revoke the key like any other with `auth keys delete`.
+`auth login --web` prints a link to `app.krakenkey.io/device` and a short code, opens the link in your browser (unless `--no-browser`), and waits up to 10 minutes. Sign in, check the code matches, and click **Approve**: the dashboard creates an API key named `CLI login: <hostname>` and the CLI saves it to the config file. Instructions go to stderr, so `--output json` stdout carries only `{"keyId", "keyName"}`. Revoke it under **API Keys** in the dashboard.
+
+Creating and deleting keys needs a dashboard session. The CLI always calls the API with an API key, so the API refuses `auth keys create` and `auth keys delete` with a 403. This stops a leaked key from minting a replacement for itself. Use `auth login --web` to get a new key and the dashboard to delete one.
 
 `auth keys create` flags:
 
