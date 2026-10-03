@@ -35,6 +35,7 @@ type TlsCert struct {
 	LastRenewedAt *time.Time `json:"lastRenewedAt"`
 	AutoRenew     bool       `json:"autoRenew"`
 	RenewalCount  int        `json:"renewalCount"`
+	FailureReason string     `json:"failureReason,omitempty"`
 	CreatedAt     time.Time  `json:"createdAt"`
 	UserID        string     `json:"userId"`
 }

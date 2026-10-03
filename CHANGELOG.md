@@ -6,6 +6,9 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Added
+- `cert show` prints the failure reason for failed certificates, and `cert issue`, `submit`, `renew` and `retry` with `--wait` include it in their error, e.g. a missing `_acme-challenge` CNAME. Requires an API that returns `failureReason`; older APIs keep the previous messages.
+
 ---
 
 ## [v0.4.0] — 2026-09-04
