@@ -39,8 +39,9 @@ docker pull ghcr.io/krakenkey/cli:latest
 # 1. Set your API key (create one at app.krakenkey.io/dashboard → API Keys)
 krakenkey auth login
 
-# 2. Register and verify your domain
+# 2. Register your domain, add the DNS records it prints, then verify
 krakenkey domain add example.com
+krakenkey domain check example.com --wait
 krakenkey domain verify <id>
 
 # 3. Issue a certificate
@@ -70,12 +71,26 @@ krakenkey auth keys delete <id>               Delete an API key
 ### `krakenkey domain`
 
 ```
-krakenkey domain add <hostname>    Register a domain and get the DNS TXT verification record
+krakenkey domain add <hostname>    Register a domain and print the TXT and challenge CNAME records
 krakenkey domain list              List all domains
 krakenkey domain show <id>         Show domain details and verification record
+krakenkey domain check <name>...   Check DNS records for the names on a certificate
 krakenkey domain verify <id>       Trigger DNS TXT verification
 krakenkey domain delete <id>       Delete a domain
 ```
+
+Each name on a certificate needs a CNAME from `_acme-challenge.<name>` to `<name with dots as dashes>.acme.krakenkey.io` (a `*.` prefix shares its parent's record). KrakenKey checks these before every order. `domain check` takes the certificate names, resolves each challenge CNAME and, with a working API key, the ownership TXT of the registered domain that covers them. It reports each record as `ok`, `missing`, `wrong` (points elsewhere) or `conflict` (TXT records sit where the CNAME should go), and exits 1 until everything is in place.
+
+`domain check` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--resolver` | system resolver | DNS server to query, e.g. `1.1.1.1` |
+| `--wait` | `false` | Re-check until every record is in place |
+| `--poll-interval` | `30s` | How often to re-check |
+| `--poll-timeout` | `15m` | Maximum time to wait |
+
+Set `KK_ACME_ZONE` to override the `acme.krakenkey.io` challenge zone when pointing at a non-production API.
 
 ### `krakenkey cert`
 
