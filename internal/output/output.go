@@ -95,8 +95,11 @@ func (p *Printer) Printf(format string, args ...any) {
 	fmt.Fprintf(p.w, format, args...)
 }
 
-// JSON marshals v as indented JSON and writes it to stdout.
+// JSON marshals v as indented JSON and writes it to stdout (JSON mode only).
 func (p *Printer) JSON(v any) {
+	if !p.IsJSON() {
+		return
+	}
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		fmt.Fprintf(p.errW, `{"error":"failed to marshal JSON"}`+"\n")
