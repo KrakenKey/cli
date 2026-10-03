@@ -6,6 +6,10 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+---
+
+## [v0.6.1] — 2026-10-03
+
 ### Changed
 - `auth --help`, the README and the message after `auth login --web` no longer suggest `auth keys delete` for revoking a key. The API refuses `auth keys create` and `auth keys delete` from an API key (KrakenKey/app#115), so the help now says they need a dashboard session and points to `auth login --web` and the dashboard instead.
 
