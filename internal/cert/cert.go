@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/krakenkey/cli/internal/api"
@@ -210,20 +211,40 @@ func RunDownload(ctx context.Context, client *api.Client, printer *output.Printe
 	return nil
 }
 
+// RenewOptions holds parameters for the `cert renew` command.
+type RenewOptions struct {
+	// IfDue asks the API to renew only when the certificate is inside the
+	// plan's renewal window. Requires an API that supports ?ifDue=true;
+	// older APIs ignore it and renew anyway.
+	IfDue        bool
+	Wait         bool
+	PollInterval time.Duration
+	PollTimeout  time.Duration
+}
+
 // RunRenew triggers manual renewal and optionally polls until complete.
-func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, id int, wait bool, pollInterval, pollTimeout time.Duration) error {
-	resp, err := client.RenewCert(ctx, id)
+func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, id int, opts RenewOptions) error {
+	resp, err := client.RenewCert(ctx, id, opts.IfDue)
 	if err != nil {
 		return err
 	}
 
 	printer.JSON(resp)
-	printer.Success("Renewal triggered for certificate %d (status: %s)", resp.ID, resp.Status)
 
-	if !wait {
+	if resp.WasSkipped() {
+		printer.Info("%s", notDueMessage(resp))
 		return nil
 	}
-	cert, err := PollUntilDone(ctx, client, printer, resp.ID, pollInterval, pollTimeout)
+	if opts.IfDue && resp.Skipped == nil {
+		printer.Info("The API did not say whether certificate %d was due (it may not support --if-due yet), so a renewal was started", resp.ID)
+	}
+
+	printer.Success("Renewal triggered for certificate %d (status: %s)", resp.ID, resp.Status)
+
+	if !opts.Wait {
+		return nil
+	}
+	cert, err := PollUntilDone(ctx, client, printer, resp.ID, opts.PollInterval, opts.PollTimeout)
 	if err != nil {
 		return err
 	}
@@ -232,6 +253,23 @@ func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, 
 	}
 	printer.Success("Certificate %d renewed", id)
 	return nil
+}
+
+// notDueMessage describes a renewal the API skipped because the certificate
+// is outside the renewal window.
+func notDueMessage(r *api.RenewResponse) string {
+	var details []string
+	if r.ExpiresAt != nil {
+		details = append(details, "expires "+r.ExpiresAt.Format("2006-01-02"))
+	}
+	if r.RenewalWindowDays > 0 {
+		details = append(details, fmt.Sprintf("renewal window %d day%s", r.RenewalWindowDays, pluralS(r.RenewalWindowDays)))
+	}
+	msg := fmt.Sprintf("Certificate %d is not due for renewal", r.ID)
+	if len(details) > 0 {
+		msg += " (" + strings.Join(details, ", ") + ")"
+	}
+	return msg
 }
 
 // RunRevoke revokes a certificate. reason is an RFC 5280 reason code (nil = unspecified).

@@ -193,12 +193,20 @@ func (c *Client) UpdateCert(ctx context.Context, id int, autoRenew *bool) (*TlsC
 	return &cert, nil
 }
 
-func (c *Client) RenewCert(ctx context.Context, id int) (*CertResponse, error) {
-	var cr CertResponse
-	if err := c.do(ctx, http.MethodPost, "/certs/tls/"+strconv.Itoa(id)+"/renew", nil, &cr); err != nil {
+// RenewCert triggers renewal of a certificate. With ifDue the API only renews
+// when the certificate is inside the plan's renewal window and otherwise
+// answers with skipped=true. Any 2xx status is success; callers branch on
+// RenewResponse.WasSkipped, not on the status code.
+func (c *Client) RenewCert(ctx context.Context, id int, ifDue bool) (*RenewResponse, error) {
+	path := "/certs/tls/" + strconv.Itoa(id) + "/renew"
+	if ifDue {
+		path += "?ifDue=true"
+	}
+	var rr RenewResponse
+	if err := c.do(ctx, http.MethodPost, path, nil, &rr); err != nil {
 		return nil, err
 	}
-	return &cr, nil
+	return &rr, nil
 }
 
 func (c *Client) RevokeCert(ctx context.Context, id int, reason *int) (*CertResponse, error) {

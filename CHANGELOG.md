@@ -6,6 +6,9 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Added
+- `cert renew --if-due` renews only when the certificate is inside the plan's renewal window. Otherwise it prints `Certificate <id> is not due for renewal (expires <date>, renewal window <n> days)` and exits 0 without polling, so it is safe to run from cron or a systemd timer. With `--output json` it prints the API response (`skipped`, `reason`, `expiresAt`, `renewalWindowDays`). Requires an API that supports `?ifDue=true` (KrakenKey/app#126); older APIs ignore it and renew, and the CLI says so. (#45)
+
 ---
 
 ## [v0.6.1] — 2026-10-03

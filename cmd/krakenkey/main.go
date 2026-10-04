@@ -13,8 +13,8 @@ import (
 
 	flag "github.com/spf13/pflag"
 
-	"github.com/krakenkey/cli/internal/api"
 	"github.com/krakenkey/cli/internal/account"
+	"github.com/krakenkey/cli/internal/api"
 	"github.com/krakenkey/cli/internal/auth"
 	"github.com/krakenkey/cli/internal/cert"
 	"github.com/krakenkey/cli/internal/config"
@@ -605,10 +605,12 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		fs := flag.NewFlagSet("cert renew", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
 		var (
+			ifDue        bool
 			wait         bool
 			pollInterval = 15 * time.Second
 			pollTimeout  = 10 * time.Minute
 		)
+		fs.BoolVar(&ifDue, "if-due", false, "Only renew if the certificate is inside the plan's renewal window; otherwise exit 0 (safe for cron/systemd timers)")
 		fs.BoolVar(&wait, "wait", false, "Wait for renewal to complete")
 		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to poll for status")
 		fs.DurationVar(&pollTimeout, "poll-timeout", pollTimeout, "Maximum time to wait")
@@ -622,7 +624,12 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		if !ok {
 			return &api.ErrConfig{Message: "certificate ID must be an integer"}
 		}
-		return cert.RunRenew(ctx, client, printer, id, wait, pollInterval, pollTimeout)
+		return cert.RunRenew(ctx, client, printer, id, cert.RenewOptions{
+			IfDue:        ifDue,
+			Wait:         wait,
+			PollInterval: pollInterval,
+			PollTimeout:  pollTimeout,
+		})
 
 	case "revoke":
 		fs := flag.NewFlagSet("cert revoke", flag.ContinueOnError)
@@ -987,6 +994,7 @@ Examples:
   krakenkey cert list --status issued
   krakenkey cert download 42 --out ./example.crt
   krakenkey cert update 42 --auto-renew=true
+  krakenkey cert renew 42 --if-due --wait   # for cron/systemd timers
 `
 
 const endpointUsage = `Manage monitored endpoints.

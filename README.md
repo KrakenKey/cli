@@ -106,7 +106,7 @@ krakenkey cert list [--status <status>]             List certificates (filter: p
 krakenkey cert show <id>                            Show certificate details
 krakenkey cert download <id> [--out path]           Download certificate PEM
                               [--format cert|chain|fullchain]
-krakenkey cert renew <id> [--wait]                  Trigger manual renewal
+krakenkey cert renew <id> [--if-due] [--wait]       Trigger manual renewal (--if-due: only when due)
 krakenkey cert revoke <id> [--reason N]             Revoke a certificate (RFC 5280 reason code 0–10)
 krakenkey cert retry <id> [--wait]                  Retry failed issuance
 krakenkey cert update <id>                          Update certificate settings
@@ -145,6 +145,15 @@ krakenkey cert delete <id>                          Delete a certificate (failed
 | `--fullchain-out` | `./<cn>.fullchain.pem` | Full chain output path (leaf + intermediates) |
 | `--auto-renew` | `false` | Enable automatic renewal |
 | `--wait` | `false` | Wait for issuance to complete |
+| `--poll-interval` | `15s` | How often to poll for status |
+| `--poll-timeout` | `10m` | Maximum time to wait |
+
+`cert renew` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--if-due` | `false` | Only renew if the certificate is inside your plan's renewal window; otherwise print a note and exit 0. Use this for scheduled renewals |
+| `--wait` | `false` | Wait for renewal to complete |
 | `--poll-interval` | `15s` | How often to poll for status |
 | `--poll-timeout` | `10m` | Maximum time to wait |
 
@@ -285,6 +294,51 @@ docker run --rm \
     --out /out/example.com.crt \
     --fullchain-out /out/example.com.fullchain.pem
 ```
+
+## Scheduled renewals
+
+`cert renew` on its own always renews, and every renewal counts against your monthly certificate limit. For cron jobs and systemd timers use `--if-due`: the API renews only when the certificate is inside your plan's renewal window (5 days on Free, 30 days on paid plans). Otherwise nothing happens and the command exits 0 with:
+
+```
+• Certificate 42 is not due for renewal (expires 2026-12-01, renewal window 30 days)
+```
+
+With `--output json` it prints the API response instead, e.g. `{"id":42,"status":"issued","skipped":true,"reason":"not_due","expiresAt":"...","renewalWindowDays":30}`; a renewal that went ahead has `"skipped": false`. A skipped renewal never polls, even with `--wait`.
+
+`--if-due` needs an API that supports it. An older API ignores the option and renews anyway; the CLI then prints a note saying the API did not report whether the certificate was due.
+
+cron (daily at 03:17, in the crontab of a user who has run `krakenkey auth login`):
+
+```cron
+17 3 * * * /usr/local/bin/krakenkey cert renew 42 --if-due --wait
+```
+
+systemd timer:
+
+```ini
+# /etc/systemd/system/krakenkey-renew.service
+[Unit]
+Description=Renew KrakenKey certificate 42 when due
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/krakenkey/env
+ExecStart=/usr/local/bin/krakenkey cert renew 42 --if-due --wait
+
+# /etc/systemd/system/krakenkey-renew.timer
+[Unit]
+Description=Daily KrakenKey renewal check
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+`/etc/krakenkey/env` holds `KK_API_KEY=kk_...` and should be readable only by root. Enable with `systemctl enable --now krakenkey-renew.timer`.
 
 ## CSR generation
 

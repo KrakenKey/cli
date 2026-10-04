@@ -96,7 +96,7 @@ type TlsCertChainEntry struct {
 
 // TlsCertChainInfo holds the full certificate chain.
 type TlsCertChainInfo struct {
-	LeafCert      TlsCertDetails   `json:"leafCert"`
+	LeafCert      TlsCertDetails      `json:"leafCert"`
 	Intermediates []TlsCertChainEntry `json:"intermediates"`
 	FullChainPem  string              `json:"fullChainPem"`
 }
@@ -106,6 +106,22 @@ type CertResponse struct {
 	ID     int    `json:"id"`
 	Status string `json:"status"`
 }
+
+// RenewResponse is returned by POST /certs/tls/:id/renew. Skipped, Reason,
+// ExpiresAt and RenewalWindowDays are only set by APIs that support the
+// ifDue query parameter; Skipped is nil when the API did not send it.
+type RenewResponse struct {
+	ID                int        `json:"id"`
+	Status            string     `json:"status"`
+	Skipped           *bool      `json:"skipped,omitempty"`
+	Reason            string     `json:"reason,omitempty"`
+	ExpiresAt         *time.Time `json:"expiresAt,omitempty"`
+	RenewalWindowDays int        `json:"renewalWindowDays,omitempty"`
+}
+
+// WasSkipped reports whether the API skipped the renewal (ifDue=true and the
+// certificate is outside the renewal window).
+func (r *RenewResponse) WasSkipped() bool { return r.Skipped != nil && *r.Skipped }
 
 // UserProfile is the authenticated user's profile.
 type UserProfile struct {
@@ -152,12 +168,12 @@ type Subscription struct {
 
 // Endpoint represents a monitored endpoint.
 type Endpoint struct {
-	ID            string                `json:"id"`
-	UserID        string                `json:"userId"`
-	Host          string                `json:"host"`
-	Port          int                   `json:"port"`
-	SNI           *string               `json:"sni"`
-	Label         *string               `json:"label"`
+	ID               string                    `json:"id"`
+	UserID           string                    `json:"userId"`
+	Host             string                    `json:"host"`
+	Port             int                       `json:"port"`
+	SNI              *string                   `json:"sni"`
+	Label            *string                   `json:"label"`
 	IsActive         bool                      `json:"isActive"`
 	HostedRegions    []EndpointHostedRegion    `json:"hostedRegions"`
 	ProbeAssignments []EndpointProbeAssignment `json:"probeAssignments"`
