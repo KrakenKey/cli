@@ -36,11 +36,12 @@ docker pull ghcr.io/krakenkey/cli:latest
 ## Quick start
 
 ```bash
-# 1. Set your API key (create one at app.krakenkey.io/dashboard → API Keys)
-krakenkey auth login
+# 1. Sign in: approve the login in your browser (or paste a key with `auth login`)
+krakenkey auth login --web
 
-# 2. Register and verify your domain
-krakenkey domain add example.com   # prints the TXT record to create
+# 2. Register your domain, add the DNS records it prints, then verify
+krakenkey domain add example.com
+krakenkey domain check example.com --wait
 krakenkey domain verify <id>
 
 # 3. Delegate ACME challenges (one-time, at your DNS provider)
@@ -58,12 +59,17 @@ Step 3 is a separate record from the ownership TXT in step 2, and it is not opti
 
 ```
 krakenkey auth login [--api-key <key>]        Save API key (prompts interactively if omitted)
+krakenkey auth login --web [--no-browser]     Approve a login in the dashboard; creates and saves a new API key
 krakenkey auth logout                         Remove stored API key
 krakenkey auth status                         Show auth status and resource counts
 krakenkey auth keys list                      List API keys
-krakenkey auth keys create --name <name>      Create a new API key
-krakenkey auth keys delete <id>               Delete an API key
+krakenkey auth keys create --name <name>      Create a new API key (dashboard session only)
+krakenkey auth keys delete <id>               Delete an API key (dashboard session only)
 ```
+
+`auth login --web` prints a link to `app.krakenkey.io/device` and a short code, opens the link in your browser (unless `--no-browser`), and waits up to 10 minutes. Sign in, check the code matches, and click **Approve**: the dashboard creates an API key named `CLI login: <hostname>` and the CLI saves it to the config file. Instructions go to stderr, so `--output json` stdout carries only `{"keyId", "keyName"}`. Revoke it under **API Keys** in the dashboard.
+
+Creating and deleting keys needs a dashboard session. The CLI always calls the API with an API key, so the API refuses `auth keys create` and `auth keys delete` with a 403. This stops a leaked key from minting a replacement for itself. Use `auth login --web` to get a new key and the dashboard to delete one.
 
 `auth keys create` flags:
 
@@ -75,12 +81,26 @@ krakenkey auth keys delete <id>               Delete an API key
 ### `krakenkey domain`
 
 ```
-krakenkey domain add <hostname>    Register a domain and get the DNS TXT verification record
+krakenkey domain add <hostname>    Register a domain and print the TXT and challenge CNAME records
 krakenkey domain list              List all domains
 krakenkey domain show <id>         Show domain details and verification record
+krakenkey domain check <name>...   Check DNS records for the names on a certificate
 krakenkey domain verify <id>       Trigger DNS TXT verification
 krakenkey domain delete <id>       Delete a domain
 ```
+
+Each name on a certificate needs a CNAME from `_acme-challenge.<name>` to `<name with dots as dashes>.acme.krakenkey.io` (a `*.` prefix shares its parent's record). KrakenKey checks these before every order. `domain check` takes the certificate names, resolves each challenge CNAME and, with a working API key, the ownership TXT of the registered domain that covers them. It reports each record as `ok`, `missing`, `wrong` (points elsewhere) or `conflict` (TXT records sit where the CNAME should go), and exits 1 until everything is in place.
+
+`domain check` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--resolver` | system resolver | DNS server to query, e.g. `1.1.1.1` |
+| `--wait` | `false` | Re-check until every record is in place |
+| `--poll-interval` | `30s` | How often to re-check |
+| `--poll-timeout` | `15m` | Maximum time to wait |
+
+Set `KK_ACME_ZONE` to override the `acme.krakenkey.io` challenge zone when pointing at a non-production API.
 
 ### `krakenkey cert`
 
@@ -91,7 +111,7 @@ krakenkey cert list [--status <status>]             List certificates (filter: p
 krakenkey cert show <id>                            Show certificate details
 krakenkey cert download <id> [--out path]           Download certificate PEM
                               [--format cert|chain|fullchain]
-krakenkey cert renew <id> [--wait]                  Trigger manual renewal
+krakenkey cert renew <id> [--if-due] [--wait]       Trigger manual renewal (--if-due: only when due; --wait saves the renewed cert)
 krakenkey cert revoke <id> [--reason N]             Revoke a certificate (RFC 5280 reason code 0–10)
 krakenkey cert retry <id> [--wait]                  Retry failed issuance
 krakenkey cert update <id>                          Update certificate settings
@@ -132,6 +152,20 @@ krakenkey cert delete <id>                          Delete a certificate (failed
 | `--wait` | `false` | Wait for issuance to complete |
 | `--poll-interval` | `15s` | How often to poll for status |
 | `--poll-timeout` | `10m` | Maximum time to wait |
+
+`cert renew` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--if-due` | `false` | Only renew if the certificate is inside your plan's renewal window; otherwise print a note and exit 0. Use this for scheduled renewals |
+| `--out` | `./<cn>.crt` | Leaf certificate output path |
+| `--chain-out` | `./<cn>.chain.crt` | Intermediate CA chain output path |
+| `--fullchain-out` | `./<cn>.fullchain.crt` | Full chain output path (leaf + intermediates) |
+| `--wait` | `false` | Wait for renewal to complete, then save the renewed certificate |
+| `--poll-interval` | `15s` | How often to poll for status |
+| `--poll-timeout` | `10m` | Maximum time to wait |
+
+Renewal reuses the certificate's original CSR, so the existing private key stays valid. With `--wait`, the renewed certificate, chain and full chain are written to the output paths once the renewal finishes, replacing any files already there. With `--if-due`, a certificate outside the renewal window is left alone and nothing is written. Without `--wait`, nothing is written; use `cert download` once the status is back to `issued`.
 
 `cert download` flags:
 
@@ -210,7 +244,7 @@ chmod 600 ~/.config/krakenkey/config.yaml
 
 ## Certificate chain
 
-`cert issue` and `cert submit` produce three output files alongside the private key:
+`cert issue`, `cert submit` and `cert renew --wait` produce three certificate files (`cert issue` also writes the private key and CSR):
 
 | File | Flag | Default | Contents |
 |------|------|---------|----------|
@@ -219,6 +253,8 @@ chmod 600 ~/.config/krakenkey/config.yaml
 | Full chain | `--fullchain-out` | `./<domain>.fullchain.pem` | Leaf + intermediates |
 
 Most web servers (nginx, Caddy, HAProxy) expect the full chain. Use `--fullchain-out` in production deployments.
+
+If you pass `--fullchain-out` or `--chain-out` and that file cannot be written (for example the chain fetch fails), `--wait` exits with status 1 after saving the leaf certificate, and the error shows the `cert download` command to fetch the chain later. Without those flags a missing chain file is only a warning.
 
 `cert download` accepts `--format` with values `cert` (default), `chain`, and `fullchain` to download a specific format for an already-issued certificate:
 
@@ -291,6 +327,57 @@ docker run --rm \
     --out /out/example.com.crt \
     --fullchain-out /out/example.com.fullchain.pem
 ```
+
+## Scheduled renewals
+
+`cert renew` on its own always renews, and every renewal counts against your monthly certificate limit. For cron jobs and systemd timers use `--if-due`: the API renews only when the certificate is inside your plan's renewal window (5 days on Free, 30 days on paid plans). Otherwise nothing happens and the command exits 0 with:
+
+```
+• Certificate 42 is not due for renewal (expires 2026-12-01, renewal window 30 days)
+```
+
+With `--output json` it prints the API response instead, e.g. `{"id":42,"status":"issued","skipped":true,"reason":"not_due","expiresAt":"...","renewalWindowDays":30}`; a renewal that went ahead has `"skipped": false`. A skipped renewal never polls, even with `--wait`.
+
+`--if-due` needs an API that supports it. An older API ignores the option and renews anyway; the CLI then prints a note saying the API did not report whether the certificate was due.
+
+Pass explicit output paths: with `--wait`, a renewal that goes ahead writes the new certificate files, and the default `./<cn>.crt` paths depend on the working directory, which differs between cron and systemd. A skipped renewal writes nothing.
+
+cron (daily at 03:17, in the crontab of a user who has run `krakenkey auth login`):
+
+```cron
+17 3 * * * /usr/local/bin/krakenkey cert renew 42 --if-due --wait --out /etc/ssl/krakenkey/example.crt --fullchain-out /etc/ssl/krakenkey/example.fullchain.crt
+```
+
+systemd timer:
+
+```ini
+# /etc/systemd/system/krakenkey-renew.service
+[Unit]
+Description=Renew KrakenKey certificate 42 when due
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/krakenkey/env
+ExecStart=/usr/local/bin/krakenkey cert renew 42 --if-due --wait \
+  --out /etc/ssl/krakenkey/example.crt \
+  --fullchain-out /etc/ssl/krakenkey/example.fullchain.crt
+# Optional: reload the server so it picks up a renewed certificate
+ExecStartPost=/usr/bin/systemctl reload nginx
+
+# /etc/systemd/system/krakenkey-renew.timer
+[Unit]
+Description=Daily KrakenKey renewal check
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+`/etc/krakenkey/env` holds `KK_API_KEY=kk_...` and should be readable only by root. Enable with `systemctl enable --now krakenkey-renew.timer`.
 
 ## CSR generation
 

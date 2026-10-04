@@ -13,8 +13,8 @@ import (
 
 	flag "github.com/spf13/pflag"
 
-	"github.com/krakenkey/cli/internal/api"
 	"github.com/krakenkey/cli/internal/account"
+	"github.com/krakenkey/cli/internal/api"
 	"github.com/krakenkey/cli/internal/auth"
 	"github.com/krakenkey/cli/internal/cert"
 	"github.com/krakenkey/cli/internal/config"
@@ -205,11 +205,36 @@ func runAuth(ctx context.Context, client *api.Client, printer *output.Printer, c
 	case "login":
 		fs := flag.NewFlagSet("auth login", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
-		var key string
+		var (
+			key       string
+			web       bool
+			noBrowser bool
+		)
 		fs.StringVar(&key, "api-key", "", "API key to save")
-		fs.Usage = func() { fmt.Fprint(os.Stderr, "Usage: krakenkey auth login [--api-key <key>]\n") }
+		fs.BoolVar(&web, "web", false, "Sign in through the dashboard in a browser instead of pasting a key")
+		fs.BoolVar(&noBrowser, "no-browser", false, "With --web, print the link without trying to open a browser")
+		fs.Usage = func() {
+			fmt.Fprint(os.Stderr, "Usage: krakenkey auth login [--api-key <key> | --web [--no-browser]]\n")
+		}
 		if err := fs.Parse(subArgs); err != nil {
 			return err
+		}
+		if web {
+			if key != "" {
+				return &api.ErrConfig{Message: "use either --api-key or --web, not both"}
+			}
+			anon := api.NewClient(cfg.APIURL, "", version, runtime.GOOS, runtime.GOARCH)
+			tok, err := auth.RunWebLogin(ctx, anon, auth.WebLoginOptions{OpenBrowser: !noBrowser})
+			if err != nil {
+				return err
+			}
+			webClient := api.NewClient(cfg.APIURL, tok.APIKey, version, runtime.GOOS, runtime.GOARCH)
+			if err := auth.RunLogin(ctx, webClient, printer, tok.APIKey); err != nil {
+				return err
+			}
+			printer.JSON(map[string]string{"keyId": tok.ID, "keyName": tok.Name})
+			printer.Info("Created API key %q; revoke it under API Keys in the dashboard", tok.Name)
+			return nil
 		}
 		if key == "" {
 			fmt.Fprint(os.Stderr, "Enter API key: ")
@@ -343,6 +368,36 @@ func runDomain(ctx context.Context, client *api.Client, printer *output.Printer,
 			return &api.ErrConfig{Message: "domain ID is required"}
 		}
 		return domain.RunVerify(ctx, client, printer, fs.Arg(0))
+
+	case "check":
+		fs := flag.NewFlagSet("domain check", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		var (
+			resolver     string
+			wait         bool
+			pollInterval = 30 * time.Second
+			pollTimeout  = 15 * time.Minute
+		)
+		fs.StringVar(&resolver, "resolver", "", "DNS server to query, e.g. 1.1.1.1 (default: system resolver)")
+		fs.BoolVar(&wait, "wait", false, "Wait until every record is in place")
+		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to re-check")
+		fs.DurationVar(&pollTimeout, "poll-timeout", pollTimeout, "Maximum time to wait")
+		fs.Usage = func() {
+			fmt.Fprint(os.Stderr, "Usage: krakenkey domain check <name> [<name>...] [--resolver ip] [--wait]\n")
+		}
+		if err := fs.Parse(subArgs); err != nil {
+			return err
+		}
+		if fs.NArg() == 0 {
+			return &api.ErrConfig{Message: "at least one certificate name is required"}
+		}
+		return domain.RunCheck(ctx, client, printer, domain.CheckOptions{
+			Names:        fs.Args(),
+			Resolver:     domain.NewResolver(resolver),
+			Wait:         wait,
+			PollInterval: pollInterval,
+			PollTimeout:  pollTimeout,
+		})
 
 	case "delete":
 		fs := flag.NewFlagSet("domain delete", flag.ContinueOnError)
@@ -550,13 +605,25 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		fs := flag.NewFlagSet("cert renew", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
 		var (
+			out          string
+			chainOut     string
+			fullchainOut string
+			ifDue        bool
 			wait         bool
 			pollInterval = 15 * time.Second
 			pollTimeout  = 10 * time.Minute
 		)
-		fs.BoolVar(&wait, "wait", false, "Wait for renewal to complete")
+		fs.BoolVar(&ifDue, "if-due", false, "Only renew if the certificate is inside the plan's renewal window; otherwise exit 0 (safe for cron/systemd timers)")
+		fs.StringVar(&out, "out", "", "Certificate output path, used with --wait (default: ./<cn>.crt)")
+		fs.StringVar(&chainOut, "chain-out", "", "Chain output path, used with --wait (default: ./<cn>.chain.crt)")
+		fs.StringVar(&fullchainOut, "fullchain-out", "", "Full chain output path, used with --wait (default: ./<cn>.fullchain.crt)")
+		fs.BoolVar(&wait, "wait", false, "Wait for renewal to complete and save the renewed certificate")
 		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to poll for status")
 		fs.DurationVar(&pollTimeout, "poll-timeout", pollTimeout, "Maximum time to wait")
+		fs.Usage = func() {
+			fmt.Fprint(os.Stderr, "Usage: krakenkey cert renew <id> [--if-due] [--wait] [flags]\n")
+			fs.PrintDefaults()
+		}
 		if err := fs.Parse(subArgs); err != nil {
 			return err
 		}
@@ -567,7 +634,15 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		if !ok {
 			return &api.ErrConfig{Message: "certificate ID must be an integer"}
 		}
-		return cert.RunRenew(ctx, client, printer, id, wait, pollInterval, pollTimeout)
+		return cert.RunRenew(ctx, client, printer, id, cert.RenewOptions{
+			Out:          out,
+			ChainOut:     chainOut,
+			FullchainOut: fullchainOut,
+			IfDue:        ifDue,
+			Wait:         wait,
+			PollInterval: pollInterval,
+			PollTimeout:  pollTimeout,
+		})
 
 	case "revoke":
 		fs := flag.NewFlagSet("cert revoke", flag.ContinueOnError)
@@ -862,18 +937,22 @@ Usage:
   krakenkey auth <subcommand> [flags]
 
 Subcommands:
-  login             Save an API key to the config file
+  login             Save an API key to the config file (--web: approve in a browser)
   logout            Remove the stored API key
   status            Show current user and resource counts
   keys list         List API keys
-  keys create       Create a new API key
-  keys delete       Delete an API key
+  keys create       Create a new API key (needs a dashboard session)
+  keys delete       Delete an API key (needs a dashboard session)
+
+The API refuses keys create and keys delete when called with an API key,
+which is all the CLI has. To get a key, run auth login --web and approve it
+in the dashboard. To revoke one, use API Keys in the dashboard.
 
 Examples:
+  krakenkey auth login --web
   krakenkey auth login --api-key kk_...
   krakenkey auth status
-  krakenkey auth keys create --name ci-deploy
-  krakenkey auth keys delete <id>
+  krakenkey auth keys list
 `
 
 const domainUsage = `Register and verify domains.
@@ -882,15 +961,16 @@ Usage:
   krakenkey domain <subcommand> [flags]
 
 Subcommands:
-  add <hostname>    Register a domain and get the DNS TXT record
-  list              List all registered domains
-  show <id>         Show domain details
-  verify <id>       Trigger DNS TXT verification
-  delete <id>       Delete a domain
+  add <hostname>      Register a domain and print the DNS records it needs
+  list                List all registered domains
+  show <id>           Show domain details
+  check <name>...     Check the TXT and _acme-challenge CNAME records for certificate names
+  verify <id>         Trigger DNS TXT verification
+  delete <id>         Delete a domain
 
 Examples:
   krakenkey domain add example.com
-  krakenkey domain list
+  krakenkey domain check example.com www.example.com --wait
   krakenkey domain verify <id>
 `
 
@@ -915,7 +995,7 @@ Subcommands:
   list      List certificates
   show      Show certificate details
   download  Download the certificate PEM
-  renew     Trigger manual renewal
+  renew     Trigger manual renewal (--wait saves the renewed cert)
   revoke    Revoke a certificate
   retry     Retry a failed issuance
   update    Update certificate settings
@@ -926,7 +1006,9 @@ Examples:
   krakenkey cert submit --csr ./example.csr --wait
   krakenkey cert list --status issued
   krakenkey cert download 42 --out ./example.crt
+  krakenkey cert renew 42 --wait --fullchain-out ./example.fullchain.crt
   krakenkey cert update 42 --auto-renew=true
+  krakenkey cert renew 42 --if-due --wait   # for cron/systemd timers
 `
 
 const endpointUsage = `Manage monitored endpoints.

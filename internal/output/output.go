@@ -15,11 +15,12 @@ import (
 )
 
 const (
-	colorReset = "\033[0m"
-	colorRed   = "\033[31m"
-	colorGreen = "\033[32m"
-	colorBlue  = "\033[34m"
-	colorBold  = "\033[1m"
+	colorReset  = "\033[0m"
+	colorRed    = "\033[31m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorBlue   = "\033[34m"
+	colorBold   = "\033[1m"
 )
 
 // Printer formats and writes CLI output.
@@ -71,6 +72,18 @@ func (p *Printer) Error(msg string, args ...any) {
 	fmt.Fprint(p.errW, p.color(colorRed, "Error:")+" "+text+"\n")
 }
 
+// Warn prints a warning to stderr. In JSON mode it emits {"warning":"..."}
+// so stdout stays a single JSON document.
+func (p *Printer) Warn(msg string, args ...any) {
+	text := fmt.Sprintf(msg, args...)
+	if p.IsJSON() {
+		data, _ := json.Marshal(map[string]string{"warning": text})
+		fmt.Fprintln(p.errW, string(data))
+		return
+	}
+	fmt.Fprint(p.errW, p.color(colorYellow, "Warning:")+" "+text+"\n")
+}
+
 // Info prints an informational message prefixed with • (text mode only).
 func (p *Printer) Info(msg string, args ...any) {
 	if p.IsJSON() {
@@ -95,8 +108,11 @@ func (p *Printer) Printf(format string, args ...any) {
 	fmt.Fprintf(p.w, format, args...)
 }
 
-// JSON marshals v as indented JSON and writes it to stdout.
+// JSON marshals v as indented JSON and writes it to stdout (JSON mode only).
 func (p *Printer) JSON(v any) {
+	if !p.IsJSON() {
+		return
+	}
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		fmt.Fprintf(p.errW, `{"error":"failed to marshal JSON"}`+"\n")

@@ -50,7 +50,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	if err != nil {
 		return &ErrNetwork{Message: fmt.Sprintf("build request: %s", err)}
 	}
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
 	req.Header.Set("User-Agent", c.userAgent)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -191,12 +193,20 @@ func (c *Client) UpdateCert(ctx context.Context, id int, autoRenew *bool) (*TlsC
 	return &cert, nil
 }
 
-func (c *Client) RenewCert(ctx context.Context, id int) (*CertResponse, error) {
-	var cr CertResponse
-	if err := c.do(ctx, http.MethodPost, "/certs/tls/"+strconv.Itoa(id)+"/renew", nil, &cr); err != nil {
+// RenewCert triggers renewal of a certificate. With ifDue the API only renews
+// when the certificate is inside the plan's renewal window and otherwise
+// answers with skipped=true. Any 2xx status is success; callers branch on
+// RenewResponse.WasSkipped, not on the status code.
+func (c *Client) RenewCert(ctx context.Context, id int, ifDue bool) (*RenewResponse, error) {
+	path := "/certs/tls/" + strconv.Itoa(id) + "/renew"
+	if ifDue {
+		path += "?ifDue=true"
+	}
+	var rr RenewResponse
+	if err := c.do(ctx, http.MethodPost, path, nil, &rr); err != nil {
 		return nil, err
 	}
-	return &cr, nil
+	return &rr, nil
 }
 
 func (c *Client) RevokeCert(ctx context.Context, id int, reason *int) (*CertResponse, error) {
@@ -355,4 +365,28 @@ func (c *Client) GetSubscription(ctx context.Context) (*Subscription, error) {
 		return nil, err
 	}
 	return &s, nil
+}
+
+// Device login methods (krakenkey auth login --web). Both are
+// unauthenticated; use a client without an API key.
+
+func (c *Client) StartDeviceLogin(ctx context.Context, clientName string) (*DeviceCode, error) {
+	body := map[string]string{}
+	if clientName != "" {
+		body["clientName"] = clientName
+	}
+	var dc DeviceCode
+	if err := c.do(ctx, http.MethodPost, "/auth/device/code", body, &dc); err != nil {
+		return nil, err
+	}
+	return &dc, nil
+}
+
+func (c *Client) PollDeviceLogin(ctx context.Context, deviceCode string) (*DeviceToken, error) {
+	body := map[string]string{"deviceCode": deviceCode}
+	var t DeviceToken
+	if err := c.do(ctx, http.MethodPost, "/auth/device/token", body, &t); err != nil {
+		return nil, err
+	}
+	return &t, nil
 }
