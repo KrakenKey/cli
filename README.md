@@ -268,23 +268,27 @@ krakenkey cert download 42 --format chain --out ./chain.pem
 
 ### Do not rely on AIA chain repair
 
-If a server presents only the leaf certificate, some clients repair the chain by fetching the issuing intermediate from the leaf's `authorityInformationAccess` (AIA) `caIssuers` URL — and some never do:
+A server that sends only the leaf certificate works in some clients and fails in others. Some clients fill in the missing intermediate by downloading it from the `caIssuers` URL in the leaf's Authority Information Access (AIA) extension. Others never do:
 
 | Behavior | Clients |
 |----------|---------|
-| Fetches AIA | Windows CryptoAPI/Schannel, macOS Security.framework, Chrome's built-in verifier |
-| Never fetches AIA | OpenSSL, Go `crypto/x509`, Firefox, Java PKIX unless `com.sun.security.enableAIAcaIssuers=true` |
+| Download the intermediate from AIA | Windows CryptoAPI/Schannel, Apple Security.framework (macOS, iOS), Chrome's certificate verifier |
+| Never download from AIA | OpenSSL and the tools built on it (`curl`, `wget`, Python, Node.js), Go `crypto/x509`, Java unless `com.sun.security.enableAIAcaIssuers=true`, Firefox (it ships its own list of known intermediates instead) |
 
-This CLI is in the second group: it is written in Go, so `crypto/x509` will not fetch AIA for you. An incomplete chain that loads fine in a desktop browser fails here, in `curl`, and in CI:
+So a leaf-only setup can look fine in a desktop browser and still fail for API clients, monitoring and CI jobs with `unable to get local issuer certificate`. Serve the file written by `--fullchain-out` (or `cert download --format fullchain`) and every client gets the intermediates it needs.
 
-```
-error 20 at 0 depth lookup: unable to get local issuer certificate
-```
+This matters more over time. CA/Browser Forum ballot SC104 (passed 2026-09-03) makes the AIA extension optional (SHOULD instead of MUST) in TLS subscriber certificates. Let's Encrypt certificates still carry a `caIssuers` URL today, but a certificate without one gives AIA-fetching clients nothing to download.
 
-Deploy `--fullchain-out` rather than `--out` and the question does not arise. This matters more going forward: CA/Browser Forum ballot SC104 (passed 2026-09-03) relaxed the AIA extension from MUST to SHOULD in subscriber certificates, so compliant leaves may eventually carry no `caIssuers` URL at all and chain repair becomes unavailable in every client. Verify deployments with a client that does not fetch AIA:
+To check a live server with a client that does not download from AIA:
 
 ```bash
-openssl verify -CAfile /path/to/root.pem -untrusted ./example.com.chain.pem ./example.com.crt
+openssl s_client -connect example.com:443 -servername example.com -verify_return_error </dev/null
+```
+
+A missing intermediate fails with `verify error:num=20:unable to get local issuer certificate`. To check the files before deploying, using the chain downloaded above:
+
+```bash
+openssl verify -untrusted ./chain.pem ./example.com.crt
 ```
 
 ## Output formats

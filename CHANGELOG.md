@@ -7,11 +7,7 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 ## [Unreleased]
 
 ### Documentation
-- **ACME challenge delegation**: the quick start omitted the one-time `_acme-challenge` CNAME, which is required for issuance and is a separate record from the ownership TXT. Added it as an explicit step, plus a Troubleshooting section for the `ACME challenge delegation missing` / `mismatch` errors the API now returns before contacting the CA — including the dots-to-dashes target format, the wildcard rule, and that these are permanent failures rather than something a retry fixes.
-- **Certificate chain**: new "Do not rely on AIA chain repair" subsection in README — which clients fetch the AIA `caIssuers` URL and which never do, why this CLI is in the second group (Go's `crypto/x509` does not fetch AIA), and how to verify a deployment with `openssl verify -untrusted`.
-
-### Advisory
-- **SC104 — AIA relaxed to SHOULD**: CA/Browser Forum ballot passed 2026-09-03; IPR Review Period to 2026-10-03. `authorityInformationAccess` goes from MUST to SHOULD in the TLS subscriber certificate profile, so a compliant leaf may carry no `caIssuers` URL. No CLI change required — `--fullchain-out` already writes leaf + intermediates, which is the correct deployment artifact either way. Relevant to anyone deploying `--out` alone and relying on clients to reconstruct the chain.
+- README: new "Do not rely on AIA chain repair" subsection under Certificate chain. It lists which clients download a missing intermediate from the leaf's AIA `caIssuers` URL and which never do, explains why the full chain is the file to deploy, and shows how to check a server or chain file with `openssl`. CA/Browser Forum ballot SC104 (passed 2026-09-03) makes the AIA extension optional in TLS subscriber certificates, so leaf-only deployments will get less reliable over time. No CLI change.
 
 ---
 
