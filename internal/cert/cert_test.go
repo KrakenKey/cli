@@ -299,7 +299,7 @@ func TestRunRenew_Success(t *testing.T) {
 	client := newTestClient(srv.URL)
 	printer, out, _ := newPrinter()
 
-	err := cert.RunRenew(context.Background(), client, printer, 5, false, 0, 0)
+	err := cert.RunRenew(context.Background(), client, printer, 5, cert.RenewOptions{})
 	if err != nil {
 		t.Fatalf("RunRenew: %v", err)
 	}

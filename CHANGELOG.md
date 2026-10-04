@@ -6,6 +6,9 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Fixed
+- `cert renew --wait` now saves the renewed certificate, chain and full chain once the renewal finishes, the same way `cert issue --wait` does. It previously waited and then wrote nothing, so the files on disk kept the old certificate. `cert renew` gains `--out`, `--chain-out` and `--fullchain-out` (defaults `./<cn>.crt`, `./<cn>.chain.crt`, `./<cn>.fullchain.crt`). With `--output json`, `renew --wait` now prints the renewed certificate object instead of the initial `{"id","status"}` response. (#43)
+
 ---
 
 ## [v0.6.1] — 2026-10-03
