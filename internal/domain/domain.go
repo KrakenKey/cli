@@ -10,21 +10,34 @@ import (
 	"github.com/krakenkey/cli/internal/output"
 )
 
-// RunAdd registers a new domain and prints DNS TXT verification instructions.
+// RunAdd registers a new domain and prints the DNS records it needs.
 func RunAdd(ctx context.Context, client *api.Client, printer *output.Printer, hostname string) error {
 	d, err := client.CreateDomain(ctx, hostname)
 	if err != nil {
 		return err
 	}
 
-	printer.JSON(d)
+	recordName, target := ChallengeRecord(d.Hostname, ACMEZone())
+	printer.JSON(struct {
+		*api.Domain
+		DNSRecords []DNSRecord `json:"dnsRecords"`
+	}{d, []DNSRecord{
+		{Type: "TXT", Name: d.Hostname, Value: d.VerificationCode},
+		{Type: "CNAME", Name: recordName, Value: target},
+	}})
 	printer.Success("Domain registered: %s", d.Hostname)
 	printer.Println("")
-	printer.Println("Add a DNS TXT record to verify ownership:")
-	printer.Println("  Name:  %s", d.Hostname)
-	printer.Println("  Value: %s", d.VerificationCode)
+	printer.Println("Add these DNS records:")
+	printer.Println("  TXT    %s", d.Hostname)
+	printer.Println("         %s", d.VerificationCode)
+	printer.Println("  CNAME  %s", recordName)
+	printer.Println("         %s", target)
 	printer.Println("")
-	printer.Info("Run `krakenkey domain verify %s` once the record has propagated", d.ID)
+	printer.Println("The TXT proves ownership and stays in place. Every other name on a")
+	printer.Println("certificate, such as a www subdomain, needs its own _acme-challenge CNAME;")
+	printer.Println("`krakenkey domain check <name>...` lists them and what's still missing.")
+	printer.Println("")
+	printer.Info("Run `krakenkey domain verify %s` once the TXT record has propagated", d.ID)
 	return nil
 }
 

@@ -169,6 +169,23 @@ func TestRunShow_Success(t *testing.T) {
 	}
 }
 
+func TestRunShow_FailedShowsReason(t *testing.T) {
+	reason := "ACME challenge delegation mismatch: _acme-challenge.example.com points to elsewhere.example.net"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(api.TlsCert{ID: 7, Status: "failed", FailureReason: reason})
+	}))
+	defer srv.Close()
+
+	printer, out, _ := newPrinter()
+	if err := cert.RunShow(context.Background(), newTestClient(srv.URL), printer, 7); err != nil {
+		t.Fatalf("RunShow: %v", err)
+	}
+	if !strings.Contains(out.String(), "Reason:      "+reason) {
+		t.Errorf("output missing failure reason line:\n%s", out.String())
+	}
+}
+
 func TestRunDownload_Success(t *testing.T) {
 	dir := t.TempDir()
 	outPath := filepath.Join(dir, "test.crt")
@@ -282,7 +299,7 @@ func TestRunRenew_Success(t *testing.T) {
 	client := newTestClient(srv.URL)
 	printer, out, _ := newPrinter()
 
-	err := cert.RunRenew(context.Background(), client, printer, 5, false, 0, 0)
+	err := cert.RunRenew(context.Background(), client, printer, 5, cert.RenewOptions{})
 	if err != nil {
 		t.Fatalf("RunRenew: %v", err)
 	}

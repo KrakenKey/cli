@@ -3,9 +3,11 @@ package cert
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/krakenkey/cli/internal/api"
@@ -90,6 +92,10 @@ func RunShow(ctx context.Context, client *api.Client, printer *output.Printer, i
 	}
 	if c.RenewalCount > 0 {
 		printer.Println("Renewals:    %d", c.RenewalCount)
+	}
+
+	if c.Status == api.CertStatusFailed && c.FailureReason != "" {
+		printer.Println("Reason:      %s", c.FailureReason)
 	}
 
 	if c.ParsedCsr != nil && c.ParsedCsr.PublicKey != nil {
@@ -205,28 +211,81 @@ func RunDownload(ctx context.Context, client *api.Client, printer *output.Printe
 	return nil
 }
 
-// RunRenew triggers manual renewal and optionally polls until complete.
-func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, id int, wait bool, pollInterval, pollTimeout time.Duration) error {
-	resp, err := client.RenewCert(ctx, id)
+// RenewOptions holds parameters for the `cert renew` command.
+type RenewOptions struct {
+	Out          string // path for certificate PEM, default: ./<cn>.crt
+	ChainOut     string // path for chain PEM, default: ./<cn>.chain.crt
+	FullchainOut string // path for fullchain PEM, default: ./<cn>.fullchain.crt
+	// IfDue asks the API to renew only when the certificate is inside the
+	// plan's renewal window. Requires an API that supports ?ifDue=true;
+	// older APIs ignore it and renew anyway.
+	IfDue        bool
+	Wait         bool
+	PollInterval time.Duration
+	PollTimeout  time.Duration
+}
+
+// RunRenew triggers manual renewal. With opts.Wait it polls until the renewal
+// finishes and saves the renewed certificate, chain and full chain the same
+// way `cert issue --wait` does. With opts.IfDue a certificate outside the
+// renewal window is left alone and nothing is polled or saved.
+func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, id int, opts RenewOptions) error {
+	resp, err := client.RenewCert(ctx, id, opts.IfDue)
 	if err != nil {
 		return err
 	}
 
-	printer.JSON(resp)
-	printer.Success("Renewal triggered for certificate %d (status: %s)", resp.ID, resp.Status)
-
-	if !wait {
+	if resp.WasSkipped() {
+		printer.Info("%s", notDueMessage(resp))
+		printer.JSON(resp)
 		return nil
 	}
-	cert, err := PollUntilDone(ctx, client, printer, resp.ID, pollInterval, pollTimeout)
+	if opts.IfDue && resp.Skipped == nil {
+		printer.Info("The API did not say whether certificate %d was due (it may not support --if-due yet), so a renewal was started", resp.ID)
+	}
+
+	printer.Success("Renewal triggered for certificate %d (status: %s)", resp.ID, resp.Status)
+
+	if !opts.Wait {
+		printer.JSON(resp)
+		return nil
+	}
+	cert, err := PollUntilDone(ctx, client, printer, resp.ID, opts.PollInterval, opts.PollTimeout)
 	if err != nil {
 		return err
 	}
 	if cert.Status == api.CertStatusFailed {
-		return fmt.Errorf("renewal failed for certificate %d", id)
+		return failedError(cert, "renewal failed for certificate %d", id)
 	}
-	printer.Success("Certificate %d renewed", id)
+
+	if err := saveIssuedCert(ctx, client, printer, cert, cnFromCert(cert), certOutputs{
+		Out:          opts.Out,
+		ChainOut:     opts.ChainOut,
+		FullchainOut: opts.FullchainOut,
+	}); err != nil {
+		return err
+	}
+
+	printer.JSON(cert)
+	printer.Success("Certificate %d renewed", cert.ID)
 	return nil
+}
+
+// notDueMessage describes a renewal the API skipped because the certificate
+// is outside the renewal window.
+func notDueMessage(r *api.RenewResponse) string {
+	var details []string
+	if r.ExpiresAt != nil {
+		details = append(details, "expires "+r.ExpiresAt.Format("2006-01-02"))
+	}
+	if r.RenewalWindowDays > 0 {
+		details = append(details, fmt.Sprintf("renewal window %d day%s", r.RenewalWindowDays, pluralS(r.RenewalWindowDays)))
+	}
+	msg := fmt.Sprintf("Certificate %d is not due for renewal", r.ID)
+	if len(details) > 0 {
+		msg += " (" + strings.Join(details, ", ") + ")"
+	}
+	return msg
 }
 
 // RunRevoke revokes a certificate. reason is an RFC 5280 reason code (nil = unspecified).
@@ -258,7 +317,7 @@ func RunRetry(ctx context.Context, client *api.Client, printer *output.Printer, 
 		return err
 	}
 	if cert.Status == api.CertStatusFailed {
-		return fmt.Errorf("certificate %d issuance failed after retry", id)
+		return failedError(cert, "certificate %d issuance failed after retry", id)
 	}
 	printer.Success("Certificate %d issued", id)
 	return nil
@@ -285,6 +344,16 @@ func RunUpdate(ctx context.Context, client *api.Client, printer *output.Printer,
 		printer.Println("Auto-renew: %v", c.AutoRenew)
 	}
 	return nil
+}
+
+// failedError builds the error for a certificate that ended in "failed",
+// appending the API's failure reason when it returns one.
+func failedError(c *api.TlsCert, format string, args ...any) error {
+	msg := fmt.Sprintf(format, args...)
+	if c.FailureReason != "" {
+		msg += ": " + c.FailureReason
+	}
+	return errors.New(msg)
 }
 
 // PollUntilDone polls GET /certs/:id until the cert reaches a terminal state
