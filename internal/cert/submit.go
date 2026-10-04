@@ -79,19 +79,14 @@ func RunSubmit(ctx context.Context, client *api.Client, printer *output.Printer,
 			fullchainOut = cnFromCert(cert) + ".fullchain.crt"
 		}
 
-		if cert.ChainPem != "" {
-			if err := os.WriteFile(chainOut, []byte(cert.ChainPem), 0o644); err != nil {
-				return fmt.Errorf("write chain: %w", err)
-			}
-			printer.Info("Chain saved to %s", chainOut)
-		}
-
-		chainInfo, err := client.GetCertChain(ctx, cert.ID)
-		if err == nil {
-			if err := os.WriteFile(fullchainOut, []byte(chainInfo.FullChainPem), 0o644); err != nil {
-				return fmt.Errorf("write fullchain: %w", err)
-			}
-			printer.Info("Full chain saved to %s", fullchainOut)
+		if err := saveChainFiles(ctx, client, printer, cert, chainOutputs{
+			CertOut:            certOut,
+			ChainOut:           chainOut,
+			FullchainOut:       fullchainOut,
+			ChainRequested:     opts.ChainOut != "",
+			FullchainRequested: opts.FullchainOut != "",
+		}); err != nil {
+			return err
 		}
 	}
 
@@ -99,4 +94,3 @@ func RunSubmit(ctx context.Context, client *api.Client, printer *output.Printer,
 	printer.Success("Certificate %d issued", cert.ID)
 	return nil
 }
-

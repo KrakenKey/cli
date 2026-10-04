@@ -6,6 +6,9 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Fixed
+- `cert issue --wait` and `cert submit --wait` no longer skip the full chain silently when it cannot be fetched. If you passed `--fullchain-out` (or `--chain-out` and the API returned no intermediate chain), the command now exits 1 with an error that says the leaf certificate was saved and gives the `krakenkey cert download <id> --format fullchain --out <path>` command to fetch the chain later. Without an explicit chain flag it prints a warning on stderr and still exits 0. (#44)
+
 ---
 
 ## [v0.6.1] — 2026-10-03
