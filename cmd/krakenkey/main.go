@@ -608,10 +608,12 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 			out          string
 			chainOut     string
 			fullchainOut string
+			ifDue        bool
 			wait         bool
 			pollInterval = 15 * time.Second
 			pollTimeout  = 10 * time.Minute
 		)
+		fs.BoolVar(&ifDue, "if-due", false, "Only renew if the certificate is inside the plan's renewal window; otherwise exit 0 (safe for cron/systemd timers)")
 		fs.StringVar(&out, "out", "", "Certificate output path, used with --wait (default: ./<cn>.crt)")
 		fs.StringVar(&chainOut, "chain-out", "", "Chain output path, used with --wait (default: ./<cn>.chain.crt)")
 		fs.StringVar(&fullchainOut, "fullchain-out", "", "Full chain output path, used with --wait (default: ./<cn>.fullchain.crt)")
@@ -619,7 +621,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to poll for status")
 		fs.DurationVar(&pollTimeout, "poll-timeout", pollTimeout, "Maximum time to wait")
 		fs.Usage = func() {
-			fmt.Fprint(os.Stderr, "Usage: krakenkey cert renew <id> [--wait] [flags]\n")
+			fmt.Fprint(os.Stderr, "Usage: krakenkey cert renew <id> [--if-due] [--wait] [flags]\n")
 			fs.PrintDefaults()
 		}
 		if err := fs.Parse(subArgs); err != nil {
@@ -636,6 +638,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 			Out:          out,
 			ChainOut:     chainOut,
 			FullchainOut: fullchainOut,
+			IfDue:        ifDue,
 			Wait:         wait,
 			PollInterval: pollInterval,
 			PollTimeout:  pollTimeout,
@@ -1005,6 +1008,7 @@ Examples:
   krakenkey cert download 42 --out ./example.crt
   krakenkey cert renew 42 --wait --fullchain-out ./example.fullchain.crt
   krakenkey cert update 42 --auto-renew=true
+  krakenkey cert renew 42 --if-due --wait   # for cron/systemd timers
 `
 
 const endpointUsage = `Manage monitored endpoints.

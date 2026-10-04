@@ -6,6 +6,9 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Added
+- `cert renew --if-due` renews only when the certificate is inside the plan's renewal window. Otherwise it prints `Certificate <id> is not due for renewal (expires <date>, renewal window <n> days)` and exits 0 without polling, so it is safe to run from cron or a systemd timer. With `--output json` it prints the API response (`skipped`, `reason`, `expiresAt`, `renewalWindowDays`). Requires an API that supports `?ifDue=true` (KrakenKey/app#126); older APIs ignore it and renew, and the CLI says so. (#45)
+
 ### Fixed
 - `cert renew --wait` now saves the renewed certificate, chain and full chain once the renewal finishes, the same way `cert issue --wait` does. It previously waited and then wrote nothing, so the files on disk kept the old certificate. `cert renew` gains `--out`, `--chain-out` and `--fullchain-out` (defaults `./<cn>.crt`, `./<cn>.chain.crt`, `./<cn>.fullchain.crt`). With `--output json`, `renew --wait` now prints the renewed certificate object instead of the initial `{"id","status"}` response. (#43)
 - `cert issue --wait`, `cert submit --wait` and `cert renew --wait` no longer skip the full chain silently when it cannot be fetched. If you passed `--fullchain-out` (or `--chain-out` and the API returned no intermediate chain), the command now exits 1 with an error that says the leaf certificate was saved and gives the `krakenkey cert download <id> --format fullchain --out <path>` command to fetch the chain later. Without an explicit chain flag it prints a warning on stderr and still exits 0. (#44)

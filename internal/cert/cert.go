@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/krakenkey/cli/internal/api"
@@ -215,6 +216,10 @@ type RenewOptions struct {
 	Out          string // path for certificate PEM, default: ./<cn>.crt
 	ChainOut     string // path for chain PEM, default: ./<cn>.chain.crt
 	FullchainOut string // path for fullchain PEM, default: ./<cn>.fullchain.crt
+	// IfDue asks the API to renew only when the certificate is inside the
+	// plan's renewal window. Requires an API that supports ?ifDue=true;
+	// older APIs ignore it and renew anyway.
+	IfDue        bool
 	Wait         bool
 	PollInterval time.Duration
 	PollTimeout  time.Duration
@@ -222,11 +227,21 @@ type RenewOptions struct {
 
 // RunRenew triggers manual renewal. With opts.Wait it polls until the renewal
 // finishes and saves the renewed certificate, chain and full chain the same
-// way `cert issue --wait` does.
+// way `cert issue --wait` does. With opts.IfDue a certificate outside the
+// renewal window is left alone and nothing is polled or saved.
 func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, id int, opts RenewOptions) error {
-	resp, err := client.RenewCert(ctx, id)
+	resp, err := client.RenewCert(ctx, id, opts.IfDue)
 	if err != nil {
 		return err
+	}
+
+	if resp.WasSkipped() {
+		printer.Info("%s", notDueMessage(resp))
+		printer.JSON(resp)
+		return nil
+	}
+	if opts.IfDue && resp.Skipped == nil {
+		printer.Info("The API did not say whether certificate %d was due (it may not support --if-due yet), so a renewal was started", resp.ID)
 	}
 
 	printer.Success("Renewal triggered for certificate %d (status: %s)", resp.ID, resp.Status)
@@ -254,6 +269,23 @@ func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, 
 	printer.JSON(cert)
 	printer.Success("Certificate %d renewed", cert.ID)
 	return nil
+}
+
+// notDueMessage describes a renewal the API skipped because the certificate
+// is outside the renewal window.
+func notDueMessage(r *api.RenewResponse) string {
+	var details []string
+	if r.ExpiresAt != nil {
+		details = append(details, "expires "+r.ExpiresAt.Format("2006-01-02"))
+	}
+	if r.RenewalWindowDays > 0 {
+		details = append(details, fmt.Sprintf("renewal window %d day%s", r.RenewalWindowDays, pluralS(r.RenewalWindowDays)))
+	}
+	msg := fmt.Sprintf("Certificate %d is not due for renewal", r.ID)
+	if len(details) > 0 {
+		msg += " (" + strings.Join(details, ", ") + ")"
+	}
+	return msg
 }
 
 // RunRevoke revokes a certificate. reason is an RFC 5280 reason code (nil = unspecified).
