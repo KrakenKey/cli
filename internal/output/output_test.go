@@ -162,3 +162,29 @@ func TestSpinner_JSONMode_Noop(t *testing.T) {
 	s.Stop()
 	// Must not panic or block.
 }
+
+func TestPrinter_TextMode_Warn_WritesToStderr(t *testing.T) {
+	p, out, errOut := newPrinter("text")
+	p.Warn("chain %s", "skipped")
+	if out.Len() != 0 {
+		t.Errorf("Warn wrote to stdout: %q", out.String())
+	}
+	if errOut.String() != "Warning: chain skipped\n" {
+		t.Errorf("Warn output = %q, want %q", errOut.String(), "Warning: chain skipped\n")
+	}
+}
+
+func TestPrinter_JSONMode_Warn_WritesJSONToStderr(t *testing.T) {
+	p, out, errOut := newPrinter("json")
+	p.Warn("chain %s", "skipped")
+	if out.Len() != 0 {
+		t.Errorf("Warn wrote to stdout in JSON mode: %q", out.String())
+	}
+	var got map[string]string
+	if err := json.Unmarshal(errOut.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal warning JSON: %v\noutput: %s", err, errOut.String())
+	}
+	if got["warning"] != "chain skipped" {
+		t.Errorf("warning field = %q, want %q", got["warning"], "chain skipped")
+	}
+}

@@ -18,7 +18,8 @@ type certOutputs struct {
 }
 
 // saveIssuedCert writes the leaf certificate, the intermediate chain and the
-// full chain of an issued certificate to disk. It is shared by `cert issue`,
+// full chain of an issued certificate to disk; see saveChainFiles for how a
+// missing chain is handled. It is shared by `cert issue`,
 // `cert submit` and `cert renew` so all three write the same files once the
 // certificate is ready. base names the default files when a path is empty.
 func saveIssuedCert(ctx context.Context, client *api.Client, printer *output.Printer, c *api.TlsCert, base string, paths certOutputs) error {
@@ -44,19 +45,11 @@ func saveIssuedCert(ctx context.Context, client *api.Client, printer *output.Pri
 	}
 	printer.Info("Certificate saved to %s", certOut)
 
-	if c.ChainPem != "" {
-		if err := os.WriteFile(chainOut, []byte(c.ChainPem), 0o644); err != nil {
-			return fmt.Errorf("write chain: %w", err)
-		}
-		printer.Info("Chain saved to %s", chainOut)
-	}
-
-	chain, err := client.GetCertChain(ctx, c.ID)
-	if err == nil {
-		if err := os.WriteFile(fullchainOut, []byte(chain.FullChainPem), 0o644); err != nil {
-			return fmt.Errorf("write fullchain: %w", err)
-		}
-		printer.Info("Full chain saved to %s", fullchainOut)
-	}
-	return nil
+	return saveChainFiles(ctx, client, printer, c, chainOutputs{
+		CertOut:            certOut,
+		ChainOut:           chainOut,
+		FullchainOut:       fullchainOut,
+		ChainRequested:     paths.ChainOut != "",
+		FullchainRequested: paths.FullchainOut != "",
+	})
 }

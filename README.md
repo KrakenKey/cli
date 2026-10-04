@@ -248,6 +248,8 @@ chmod 600 ~/.config/krakenkey/config.yaml
 
 Most web servers (nginx, Caddy, HAProxy) expect the full chain. Use `--fullchain-out` in production deployments.
 
+If you pass `--fullchain-out` or `--chain-out` and that file cannot be written (for example the chain fetch fails), `--wait` exits with status 1 after saving the leaf certificate, and the error shows the `cert download` command to fetch the chain later. Without those flags a missing chain file is only a warning.
+
 `cert download` accepts `--format` with values `cert` (default), `chain`, and `fullchain` to download a specific format for an already-issued certificate:
 
 ```bash

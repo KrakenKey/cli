@@ -211,3 +211,42 @@ func TestRunRenew_WaitJSONOutputsRenewedCert(t *testing.T) {
 		t.Errorf("JSON = %+v, want the issued, renewed certificate", got)
 	}
 }
+
+func TestRunRenew_WaitFullchainRequested_ChainFetchFails(t *testing.T) {
+	dir := t.TempDir()
+	var renewCalled atomic.Bool
+	inner := renewServer(t, "issued", &renewCalled)
+	defer inner.Close()
+	// Same flow as renewServer, but the chain endpoint fails.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/certs/tls/42/chain" {
+			http.Error(w, `{"statusCode":500,"message":"chain unavailable"}`, http.StatusInternalServerError)
+			return
+		}
+		inner.Config.Handler.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+
+	out := filepath.Join(dir, "site.crt")
+	fullchainOut := filepath.Join(dir, "site.fullchain.crt")
+	printer, _, _ := newPrinter()
+	err := cert.RunRenew(context.Background(), newTestClient(srv.URL), printer, 42, cert.RenewOptions{
+		Out:          out,
+		FullchainOut: fullchainOut,
+		Wait:         true,
+		PollInterval: 10 * time.Millisecond,
+		PollTimeout:  2 * time.Second,
+	})
+	if err == nil {
+		t.Fatal("expected an error when --fullchain-out was requested and the chain fetch failed")
+	}
+	if want := "krakenkey cert download 42 --format fullchain --out " + fullchainOut; !strings.Contains(err.Error(), want) {
+		t.Errorf("error %q missing %q", err.Error(), want)
+	}
+	if got := mustReadFile(t, out); got != renewedLeafPem {
+		t.Errorf("cert = %q, want renewed leaf saved before the chain error", got)
+	}
+	if _, statErr := os.Stat(fullchainOut); !os.IsNotExist(statErr) {
+		t.Errorf("fullchain file should not exist, stat err = %v", statErr)
+	}
+}
