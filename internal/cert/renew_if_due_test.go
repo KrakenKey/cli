@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -45,15 +47,21 @@ func TestRunRenew_IfDue_NotDueSkips(t *testing.T) {
 	srv := ifDueServer(t, http.StatusOK, notDueBody, &gotQuery, &polls)
 	defer srv.Close()
 
+	dir := t.TempDir()
 	printer, out, _ := newPrinter()
 	err := cert.RunRenew(context.Background(), newTestClient(srv.URL), printer, 42, cert.RenewOptions{
 		IfDue:        true,
+		Out:          filepath.Join(dir, "site.crt"),
+		FullchainOut: filepath.Join(dir, "site.fullchain.crt"),
 		Wait:         true,
 		PollInterval: 10 * time.Millisecond,
 		PollTimeout:  time.Second,
 	})
 	if err != nil {
 		t.Fatalf("RunRenew: %v (a skipped renewal must exit 0)", err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Errorf("a skipped renewal wrote %d file(s), want none", len(entries))
 	}
 	if gotQuery != "ifDue=true" {
 		t.Errorf("query = %q, want ifDue=true", gotQuery)

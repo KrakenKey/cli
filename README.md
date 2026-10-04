@@ -106,7 +106,7 @@ krakenkey cert list [--status <status>]             List certificates (filter: p
 krakenkey cert show <id>                            Show certificate details
 krakenkey cert download <id> [--out path]           Download certificate PEM
                               [--format cert|chain|fullchain]
-krakenkey cert renew <id> [--if-due] [--wait]       Trigger manual renewal (--if-due: only when due)
+krakenkey cert renew <id> [--if-due] [--wait]       Trigger manual renewal (--if-due: only when due; --wait saves the renewed cert)
 krakenkey cert revoke <id> [--reason N]             Revoke a certificate (RFC 5280 reason code 0–10)
 krakenkey cert retry <id> [--wait]                  Retry failed issuance
 krakenkey cert update <id>                          Update certificate settings
@@ -153,9 +153,14 @@ krakenkey cert delete <id>                          Delete a certificate (failed
 | Flag | Default | Description |
 |---|---|---|
 | `--if-due` | `false` | Only renew if the certificate is inside your plan's renewal window; otherwise print a note and exit 0. Use this for scheduled renewals |
-| `--wait` | `false` | Wait for renewal to complete |
+| `--out` | `./<cn>.crt` | Leaf certificate output path |
+| `--chain-out` | `./<cn>.chain.crt` | Intermediate CA chain output path |
+| `--fullchain-out` | `./<cn>.fullchain.crt` | Full chain output path (leaf + intermediates) |
+| `--wait` | `false` | Wait for renewal to complete, then save the renewed certificate |
 | `--poll-interval` | `15s` | How often to poll for status |
 | `--poll-timeout` | `10m` | Maximum time to wait |
+
+Renewal reuses the certificate's original CSR, so the existing private key stays valid. With `--wait`, the renewed certificate, chain and full chain are written to the output paths once the renewal finishes, replacing any files already there. With `--if-due`, a certificate outside the renewal window is left alone and nothing is written. Without `--wait`, nothing is written; use `cert download` once the status is back to `issued`.
 
 `cert download` flags:
 
@@ -234,7 +239,7 @@ chmod 600 ~/.config/krakenkey/config.yaml
 
 ## Certificate chain
 
-`cert issue` and `cert submit` produce three output files alongside the private key:
+`cert issue`, `cert submit` and `cert renew --wait` produce three certificate files (`cert issue` also writes the private key and CSR):
 
 | File | Flag | Default | Contents |
 |------|------|---------|----------|
@@ -243,6 +248,8 @@ chmod 600 ~/.config/krakenkey/config.yaml
 | Full chain | `--fullchain-out` | `./<domain>.fullchain.pem` | Leaf + intermediates |
 
 Most web servers (nginx, Caddy, HAProxy) expect the full chain. Use `--fullchain-out` in production deployments.
+
+If you pass `--fullchain-out` or `--chain-out` and that file cannot be written (for example the chain fetch fails), `--wait` exits with status 1 after saving the leaf certificate, and the error shows the `cert download` command to fetch the chain later. Without those flags a missing chain file is only a warning.
 
 `cert download` accepts `--format` with values `cert` (default), `chain`, and `fullchain` to download a specific format for an already-issued certificate:
 
@@ -307,10 +314,12 @@ With `--output json` it prints the API response instead, e.g. `{"id":42,"status"
 
 `--if-due` needs an API that supports it. An older API ignores the option and renews anyway; the CLI then prints a note saying the API did not report whether the certificate was due.
 
+Pass explicit output paths: with `--wait`, a renewal that goes ahead writes the new certificate files, and the default `./<cn>.crt` paths depend on the working directory, which differs between cron and systemd. A skipped renewal writes nothing.
+
 cron (daily at 03:17, in the crontab of a user who has run `krakenkey auth login`):
 
 ```cron
-17 3 * * * /usr/local/bin/krakenkey cert renew 42 --if-due --wait
+17 3 * * * /usr/local/bin/krakenkey cert renew 42 --if-due --wait --out /etc/ssl/krakenkey/example.crt --fullchain-out /etc/ssl/krakenkey/example.fullchain.crt
 ```
 
 systemd timer:
@@ -323,7 +332,11 @@ Description=Renew KrakenKey certificate 42 when due
 [Service]
 Type=oneshot
 EnvironmentFile=/etc/krakenkey/env
-ExecStart=/usr/local/bin/krakenkey cert renew 42 --if-due --wait
+ExecStart=/usr/local/bin/krakenkey cert renew 42 --if-due --wait \
+  --out /etc/ssl/krakenkey/example.crt \
+  --fullchain-out /etc/ssl/krakenkey/example.fullchain.crt
+# Optional: reload the server so it picks up a renewed certificate
+ExecStartPost=/usr/bin/systemctl reload nginx
 
 # /etc/systemd/system/krakenkey-renew.timer
 [Unit]

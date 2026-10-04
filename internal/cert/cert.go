@@ -213,6 +213,9 @@ func RunDownload(ctx context.Context, client *api.Client, printer *output.Printe
 
 // RenewOptions holds parameters for the `cert renew` command.
 type RenewOptions struct {
+	Out          string // path for certificate PEM, default: ./<cn>.crt
+	ChainOut     string // path for chain PEM, default: ./<cn>.chain.crt
+	FullchainOut string // path for fullchain PEM, default: ./<cn>.fullchain.crt
 	// IfDue asks the API to renew only when the certificate is inside the
 	// plan's renewal window. Requires an API that supports ?ifDue=true;
 	// older APIs ignore it and renew anyway.
@@ -222,17 +225,19 @@ type RenewOptions struct {
 	PollTimeout  time.Duration
 }
 
-// RunRenew triggers manual renewal and optionally polls until complete.
+// RunRenew triggers manual renewal. With opts.Wait it polls until the renewal
+// finishes and saves the renewed certificate, chain and full chain the same
+// way `cert issue --wait` does. With opts.IfDue a certificate outside the
+// renewal window is left alone and nothing is polled or saved.
 func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, id int, opts RenewOptions) error {
 	resp, err := client.RenewCert(ctx, id, opts.IfDue)
 	if err != nil {
 		return err
 	}
 
-	printer.JSON(resp)
-
 	if resp.WasSkipped() {
 		printer.Info("%s", notDueMessage(resp))
+		printer.JSON(resp)
 		return nil
 	}
 	if opts.IfDue && resp.Skipped == nil {
@@ -242,6 +247,7 @@ func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, 
 	printer.Success("Renewal triggered for certificate %d (status: %s)", resp.ID, resp.Status)
 
 	if !opts.Wait {
+		printer.JSON(resp)
 		return nil
 	}
 	cert, err := PollUntilDone(ctx, client, printer, resp.ID, opts.PollInterval, opts.PollTimeout)
@@ -251,7 +257,17 @@ func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, 
 	if cert.Status == api.CertStatusFailed {
 		return failedError(cert, "renewal failed for certificate %d", id)
 	}
-	printer.Success("Certificate %d renewed", id)
+
+	if err := saveIssuedCert(ctx, client, printer, cert, cnFromCert(cert), certOutputs{
+		Out:          opts.Out,
+		ChainOut:     opts.ChainOut,
+		FullchainOut: opts.FullchainOut,
+	}); err != nil {
+		return err
+	}
+
+	printer.JSON(cert)
+	printer.Success("Certificate %d renewed", cert.ID)
 	return nil
 }
 
