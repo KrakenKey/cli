@@ -13,8 +13,8 @@ import (
 
 	flag "github.com/spf13/pflag"
 
-	"github.com/krakenkey/cli/internal/api"
 	"github.com/krakenkey/cli/internal/account"
+	"github.com/krakenkey/cli/internal/api"
 	"github.com/krakenkey/cli/internal/auth"
 	"github.com/krakenkey/cli/internal/cert"
 	"github.com/krakenkey/cli/internal/config"
@@ -605,13 +605,23 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		fs := flag.NewFlagSet("cert renew", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
 		var (
+			out          string
+			chainOut     string
+			fullchainOut string
 			wait         bool
 			pollInterval = 15 * time.Second
 			pollTimeout  = 10 * time.Minute
 		)
-		fs.BoolVar(&wait, "wait", false, "Wait for renewal to complete")
+		fs.StringVar(&out, "out", "", "Certificate output path, used with --wait (default: ./<cn>.crt)")
+		fs.StringVar(&chainOut, "chain-out", "", "Chain output path, used with --wait (default: ./<cn>.chain.crt)")
+		fs.StringVar(&fullchainOut, "fullchain-out", "", "Full chain output path, used with --wait (default: ./<cn>.fullchain.crt)")
+		fs.BoolVar(&wait, "wait", false, "Wait for renewal to complete and save the renewed certificate")
 		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to poll for status")
 		fs.DurationVar(&pollTimeout, "poll-timeout", pollTimeout, "Maximum time to wait")
+		fs.Usage = func() {
+			fmt.Fprint(os.Stderr, "Usage: krakenkey cert renew <id> [--wait] [flags]\n")
+			fs.PrintDefaults()
+		}
 		if err := fs.Parse(subArgs); err != nil {
 			return err
 		}
@@ -622,7 +632,14 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		if !ok {
 			return &api.ErrConfig{Message: "certificate ID must be an integer"}
 		}
-		return cert.RunRenew(ctx, client, printer, id, wait, pollInterval, pollTimeout)
+		return cert.RunRenew(ctx, client, printer, id, cert.RenewOptions{
+			Out:          out,
+			ChainOut:     chainOut,
+			FullchainOut: fullchainOut,
+			Wait:         wait,
+			PollInterval: pollInterval,
+			PollTimeout:  pollTimeout,
+		})
 
 	case "revoke":
 		fs := flag.NewFlagSet("cert revoke", flag.ContinueOnError)
@@ -975,7 +992,7 @@ Subcommands:
   list      List certificates
   show      Show certificate details
   download  Download the certificate PEM
-  renew     Trigger manual renewal
+  renew     Trigger manual renewal (--wait saves the renewed cert)
   revoke    Revoke a certificate
   retry     Retry a failed issuance
   update    Update certificate settings
@@ -986,6 +1003,7 @@ Examples:
   krakenkey cert submit --csr ./example.csr --wait
   krakenkey cert list --status issued
   krakenkey cert download 42 --out ./example.crt
+  krakenkey cert renew 42 --wait --fullchain-out ./example.fullchain.crt
   krakenkey cert update 42 --auto-renew=true
 `
 

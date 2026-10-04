@@ -210,27 +210,49 @@ func RunDownload(ctx context.Context, client *api.Client, printer *output.Printe
 	return nil
 }
 
-// RunRenew triggers manual renewal and optionally polls until complete.
-func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, id int, wait bool, pollInterval, pollTimeout time.Duration) error {
+// RenewOptions holds parameters for the `cert renew` command.
+type RenewOptions struct {
+	Out          string // path for certificate PEM, default: ./<cn>.crt
+	ChainOut     string // path for chain PEM, default: ./<cn>.chain.crt
+	FullchainOut string // path for fullchain PEM, default: ./<cn>.fullchain.crt
+	Wait         bool
+	PollInterval time.Duration
+	PollTimeout  time.Duration
+}
+
+// RunRenew triggers manual renewal. With opts.Wait it polls until the renewal
+// finishes and saves the renewed certificate, chain and full chain the same
+// way `cert issue --wait` does.
+func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, id int, opts RenewOptions) error {
 	resp, err := client.RenewCert(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	printer.JSON(resp)
 	printer.Success("Renewal triggered for certificate %d (status: %s)", resp.ID, resp.Status)
 
-	if !wait {
+	if !opts.Wait {
+		printer.JSON(resp)
 		return nil
 	}
-	cert, err := PollUntilDone(ctx, client, printer, resp.ID, pollInterval, pollTimeout)
+	cert, err := PollUntilDone(ctx, client, printer, resp.ID, opts.PollInterval, opts.PollTimeout)
 	if err != nil {
 		return err
 	}
 	if cert.Status == api.CertStatusFailed {
 		return failedError(cert, "renewal failed for certificate %d", id)
 	}
-	printer.Success("Certificate %d renewed", id)
+
+	if err := saveIssuedCert(ctx, client, printer, cert, cnFromCert(cert), certOutputs{
+		Out:          opts.Out,
+		ChainOut:     opts.ChainOut,
+		FullchainOut: opts.FullchainOut,
+	}); err != nil {
+		return err
+	}
+
+	printer.JSON(cert)
+	printer.Success("Certificate %d renewed", cert.ID)
 	return nil
 }
 
