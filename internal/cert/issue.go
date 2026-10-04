@@ -48,18 +48,6 @@ func RunIssue(ctx context.Context, client *api.Client, printer *output.Printer, 
 	if csrOut == "" {
 		csrOut = opts.Domain + ".csr"
 	}
-	certOut := opts.Out
-	if certOut == "" {
-		certOut = opts.Domain + ".crt"
-	}
-	chainOut := opts.ChainOut
-	if chainOut == "" {
-		chainOut = opts.Domain + ".chain.crt"
-	}
-	fullchainOut := opts.FullchainOut
-	if fullchainOut == "" {
-		fullchainOut = opts.Domain + ".fullchain.crt"
-	}
 
 	printer.Info("Generating %s key pair...", keyType)
 
@@ -117,21 +105,12 @@ func RunIssue(ctx context.Context, client *api.Client, printer *output.Printer, 
 		return failedError(cert, "certificate issuance failed for %s", opts.Domain)
 	}
 
-	if cert.CrtPem != "" {
-		if err := os.WriteFile(certOut, []byte(cert.CrtPem), 0o644); err != nil {
-			return fmt.Errorf("write certificate: %w", err)
-		}
-		printer.Info("Certificate saved to %s", certOut)
-
-		if err := saveChainFiles(ctx, client, printer, cert, chainOutputs{
-			CertOut:            certOut,
-			ChainOut:           chainOut,
-			FullchainOut:       fullchainOut,
-			ChainRequested:     opts.ChainOut != "",
-			FullchainRequested: opts.FullchainOut != "",
-		}); err != nil {
-			return err
-		}
+	if err := saveIssuedCert(ctx, client, printer, cert, opts.Domain, certOutputs{
+		Out:          opts.Out,
+		ChainOut:     opts.ChainOut,
+		FullchainOut: opts.FullchainOut,
+	}); err != nil {
+		return err
 	}
 
 	printer.JSON(cert)

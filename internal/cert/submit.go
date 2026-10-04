@@ -59,35 +59,12 @@ func RunSubmit(ctx context.Context, client *api.Client, printer *output.Printer,
 		return failedError(cert, "certificate issuance failed")
 	}
 
-	certOut := opts.Out
-	if certOut == "" && cert.CrtPem != "" {
-		certOut = cnFromCert(cert) + ".crt"
-	}
-
-	if certOut != "" && cert.CrtPem != "" {
-		if err := os.WriteFile(certOut, []byte(cert.CrtPem), 0o644); err != nil {
-			return fmt.Errorf("write certificate: %w", err)
-		}
-		printer.Info("Certificate saved to %s", certOut)
-
-		chainOut := opts.ChainOut
-		if chainOut == "" {
-			chainOut = cnFromCert(cert) + ".chain.crt"
-		}
-		fullchainOut := opts.FullchainOut
-		if fullchainOut == "" {
-			fullchainOut = cnFromCert(cert) + ".fullchain.crt"
-		}
-
-		if err := saveChainFiles(ctx, client, printer, cert, chainOutputs{
-			CertOut:            certOut,
-			ChainOut:           chainOut,
-			FullchainOut:       fullchainOut,
-			ChainRequested:     opts.ChainOut != "",
-			FullchainRequested: opts.FullchainOut != "",
-		}); err != nil {
-			return err
-		}
+	if err := saveIssuedCert(ctx, client, printer, cert, cnFromCert(cert), certOutputs{
+		Out:          opts.Out,
+		ChainOut:     opts.ChainOut,
+		FullchainOut: opts.FullchainOut,
+	}); err != nil {
+		return err
 	}
 
 	printer.JSON(cert)

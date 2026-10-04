@@ -106,7 +106,7 @@ krakenkey cert list [--status <status>]             List certificates (filter: p
 krakenkey cert show <id>                            Show certificate details
 krakenkey cert download <id> [--out path]           Download certificate PEM
                               [--format cert|chain|fullchain]
-krakenkey cert renew <id> [--wait]                  Trigger manual renewal
+krakenkey cert renew <id> [--wait]                  Trigger manual renewal (--wait saves the renewed cert)
 krakenkey cert revoke <id> [--reason N]             Revoke a certificate (RFC 5280 reason code 0–10)
 krakenkey cert retry <id> [--wait]                  Retry failed issuance
 krakenkey cert update <id>                          Update certificate settings
@@ -147,6 +147,19 @@ krakenkey cert delete <id>                          Delete a certificate (failed
 | `--wait` | `false` | Wait for issuance to complete |
 | `--poll-interval` | `15s` | How often to poll for status |
 | `--poll-timeout` | `10m` | Maximum time to wait |
+
+`cert renew` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--out` | `./<cn>.crt` | Leaf certificate output path |
+| `--chain-out` | `./<cn>.chain.crt` | Intermediate CA chain output path |
+| `--fullchain-out` | `./<cn>.fullchain.crt` | Full chain output path (leaf + intermediates) |
+| `--wait` | `false` | Wait for renewal to complete, then save the renewed certificate |
+| `--poll-interval` | `15s` | How often to poll for status |
+| `--poll-timeout` | `10m` | Maximum time to wait |
+
+Renewal reuses the certificate's original CSR, so the existing private key stays valid. With `--wait`, the renewed certificate, chain and full chain are written to the output paths once the renewal finishes, replacing any files already there. Without `--wait`, nothing is written; use `cert download` once the status is back to `issued`.
 
 `cert download` flags:
 
@@ -225,7 +238,7 @@ chmod 600 ~/.config/krakenkey/config.yaml
 
 ## Certificate chain
 
-`cert issue` and `cert submit` produce three output files alongside the private key:
+`cert issue`, `cert submit` and `cert renew --wait` produce three certificate files (`cert issue` also writes the private key and CSR):
 
 | File | Flag | Default | Contents |
 |------|------|---------|----------|
