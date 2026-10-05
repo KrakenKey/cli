@@ -128,8 +128,8 @@ krakenkey cert delete <id>                          Delete a certificate (failed
 | `--key-out` | `./<domain>.key` | Private key output path |
 | `--csr-out` | `./<domain>.csr` | CSR output path |
 | `--out` | `./<domain>.crt` | Leaf certificate output path |
-| `--chain-out` | `./<domain>.chain.pem` | Intermediate CA chain output path |
-| `--fullchain-out` | `./<domain>.fullchain.pem` | Full chain output path (leaf + intermediates) |
+| `--chain-out` | `./<domain>.chain.crt` | Intermediate CA chain output path |
+| `--fullchain-out` | `./<domain>.fullchain.crt` | Full chain output path (leaf + intermediates) |
 | `--auto-renew` | `false` | Enable automatic renewal |
 | `--wait` | `false` | Wait for issuance to complete |
 | `--poll-interval` | `15s` | How often to poll for status |
@@ -141,8 +141,8 @@ krakenkey cert delete <id>                          Delete a certificate (failed
 |---|---|---|
 | `--csr` | | Path to CSR PEM file — required |
 | `--out` | `./<cn>.crt` | Leaf certificate output path |
-| `--chain-out` | `./<cn>.chain.pem` | Intermediate CA chain output path |
-| `--fullchain-out` | `./<cn>.fullchain.pem` | Full chain output path (leaf + intermediates) |
+| `--chain-out` | `./<cn>.chain.crt` | Intermediate CA chain output path |
+| `--fullchain-out` | `./<cn>.fullchain.crt` | Full chain output path (leaf + intermediates) |
 | `--auto-renew` | `false` | Enable automatic renewal |
 | `--wait` | `false` | Wait for issuance to complete |
 | `--poll-interval` | `15s` | How often to poll for status |
@@ -257,8 +257,8 @@ chmod 600 ~/.config/krakenkey/config.yaml
 | File | Flag | Default | Contents |
 |------|------|---------|----------|
 | Leaf certificate | `--out` | `./<domain>.crt` | End-entity certificate only |
-| Intermediate chain | `--chain-out` | `./<domain>.chain.pem` | Intermediate CA certificates |
-| Full chain | `--fullchain-out` | `./<domain>.fullchain.pem` | Leaf + intermediates |
+| Intermediate chain | `--chain-out` | `./<domain>.chain.crt` | Intermediate CA certificates |
+| Full chain | `--fullchain-out` | `./<domain>.fullchain.crt` | Leaf + intermediates |
 
 Most web servers (nginx, Caddy, HAProxy) expect the full chain. Use `--fullchain-out` in production deployments.
 
