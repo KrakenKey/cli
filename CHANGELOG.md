@@ -6,6 +6,10 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+---
+
+## [v0.7.1] — 2026-10-05
+
 ### Fixed
 - `cert retry --wait` now saves the certificate, chain and full chain once issuance finishes, the same way `cert issue --wait` and `cert renew --wait` do. It previously waited and then wrote nothing, so you had to run `cert download` afterwards. `cert retry` gains `--out`, `--chain-out` and `--fullchain-out` (defaults `./<cn>.crt`, `./<cn>.chain.crt`, `./<cn>.fullchain.crt`), and a missing chain is handled the same way as for the other commands. If the retry fails again, nothing is written. With `--output json`, `retry --wait` now prints the issued certificate object instead of the initial `{"id","status"}` response. (#48)
 
