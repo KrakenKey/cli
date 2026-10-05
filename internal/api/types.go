@@ -143,10 +143,18 @@ type ResourceCounts struct {
 
 // APIKey represents a stored API key (secret not included after creation).
 type APIKey struct {
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	CreatedAt time.Time  `json:"createdAt"`
-	ExpiresAt *time.Time `json:"expiresAt"`
+	ID         string     `json:"id"`
+	Name       string     `json:"name"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	ExpiresAt  *time.Time `json:"expiresAt"`
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	LastUsedIP *string    `json:"lastUsedIp,omitempty"`
+	// Scopes is nil for a full-access key. The limits below are nil when
+	// the key isn't limited that way. Older APIs return none of them.
+	Scopes           []string `json:"scopes"`
+	AllowedDomainIDs []string `json:"allowedDomainIds"`
+	AllowedCertIDs   []int    `json:"allowedCertIds"`
+	AllowedIPs       []string `json:"allowedIps"`
 }
 
 // CreateAPIKeyResponse is returned when a new API key is created.
