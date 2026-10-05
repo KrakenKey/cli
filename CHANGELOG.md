@@ -6,6 +6,9 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Fixed
+- `cert retry --wait` now saves the certificate, chain and full chain once issuance finishes, the same way `cert issue --wait` and `cert renew --wait` do. It previously waited and then wrote nothing, so you had to run `cert download` afterwards. `cert retry` gains `--out`, `--chain-out` and `--fullchain-out` (defaults `./<cn>.crt`, `./<cn>.chain.crt`, `./<cn>.fullchain.crt`), and a missing chain is handled the same way as for the other commands. If the retry fails again, nothing is written. With `--output json`, `retry --wait` now prints the issued certificate object instead of the initial `{"id","status"}` response. (#48)
+
 ### Documentation
 - README: new "Do not rely on AIA chain repair" subsection under Certificate chain. It lists which clients download a missing intermediate from the leaf's AIA `caIssuers` URL and which never do, explains why the full chain is the file to deploy, and shows how to check a server or chain file with `openssl`. CA/Browser Forum ballot SC104 (passed 2026-09-03) makes the AIA extension optional in TLS subscriber certificates, so leaf-only deployments will get less reliable over time. No CLI change.
 - README: new Troubleshooting section for the `ACME challenge delegation missing` and `mismatch` failures. It explains where the reason shows up, that KrakenKey does not retry these on its own, and how to recover with `domain check` and `cert retry`. No CLI change.
