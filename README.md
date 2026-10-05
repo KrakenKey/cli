@@ -108,7 +108,7 @@ krakenkey cert download <id> [--out path]           Download certificate PEM
                               [--format cert|chain|fullchain]
 krakenkey cert renew <id> [--if-due] [--wait]       Trigger manual renewal (--if-due: only when due; --wait saves the renewed cert)
 krakenkey cert revoke <id> [--reason N]             Revoke a certificate (RFC 5280 reason code 0–10)
-krakenkey cert retry <id> [--wait]                  Retry failed issuance
+krakenkey cert retry <id> [--wait]                  Retry failed issuance (--wait saves the issued cert)
 krakenkey cert update <id>                          Update certificate settings
 krakenkey cert delete <id>                          Delete a certificate (failed or revoked only)
 ```
@@ -161,6 +161,19 @@ krakenkey cert delete <id>                          Delete a certificate (failed
 | `--poll-timeout` | `10m` | Maximum time to wait |
 
 Renewal reuses the certificate's original CSR, so the existing private key stays valid. With `--wait`, the renewed certificate, chain and full chain are written to the output paths once the renewal finishes, replacing any files already there. With `--if-due`, a certificate outside the renewal window is left alone and nothing is written. Without `--wait`, nothing is written; use `cert download` once the status is back to `issued`.
+
+`cert retry` flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--out` | `./<cn>.crt` | Leaf certificate output path |
+| `--chain-out` | `./<cn>.chain.crt` | Intermediate CA chain output path |
+| `--fullchain-out` | `./<cn>.fullchain.crt` | Full chain output path (leaf + intermediates) |
+| `--wait` | `false` | Wait for issuance to complete, then save the certificate |
+| `--poll-interval` | `15s` | How often to poll for status |
+| `--poll-timeout` | `10m` | Maximum time to wait |
+
+Retry reuses the certificate's CSR, so the private key you already have stays valid. With `--wait`, the certificate, chain and full chain are written to the output paths once issuance finishes. If the retry fails again, nothing is written and the command exits 1 with the reason. Without `--wait`, nothing is written; use `cert download` once the status is `issued`.
 
 `cert download` flags:
 
@@ -239,7 +252,7 @@ chmod 600 ~/.config/krakenkey/config.yaml
 
 ## Certificate chain
 
-`cert issue`, `cert submit` and `cert renew --wait` produce three certificate files (`cert issue` also writes the private key and CSR):
+`cert issue`, `cert submit`, `cert renew --wait` and `cert retry --wait` produce three certificate files (`cert issue` also writes the private key and CSR):
 
 | File | Flag | Default | Contents |
 |------|------|---------|----------|
@@ -406,7 +419,7 @@ The mismatch variant names the record's current target and the one expected.
 KrakenKey does not retry this failure on its own, because only a DNS change can fix it. To recover:
 
 1. Create or fix the record. `krakenkey domain check <name>...` with the certificate's names shows what each `_acme-challenge` record should be and what is still missing, and `--wait` re-checks until everything is in place.
-2. Once `domain check` passes, run `krakenkey cert retry <id> --wait`. The retry reuses the certificate's CSR, so the private key you already have stays valid.
+2. Once `domain check` passes, run `krakenkey cert retry <id> --wait`. The retry reuses the certificate's CSR, so the private key you already have stays valid, and `--wait` saves the certificate, chain and full chain when issuance finishes (pass `--out`, `--chain-out` or `--fullchain-out` to choose where).
 
 A CNAME chain is fine: KrakenKey follows up to five hops from `_acme-challenge.<name>` looking for the expected target. If you have only just created the record, a resolver that looked it up earlier can keep the "no record" answer until your zone's negative-cache TTL runs out, often a few minutes.
 

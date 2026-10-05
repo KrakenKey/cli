@@ -19,8 +19,8 @@ type certOutputs struct {
 
 // saveIssuedCert writes the leaf certificate, the intermediate chain and the
 // full chain of an issued certificate to disk; see saveChainFiles for how a
-// missing chain is handled. It is shared by `cert issue`,
-// `cert submit` and `cert renew` so all three write the same files once the
+// missing chain is handled. It is shared by `cert issue`, `cert submit`,
+// `cert renew` and `cert retry` so all of them write the same files once the
 // certificate is ready. base names the default files when a path is empty.
 func saveIssuedCert(ctx context.Context, client *api.Client, printer *output.Printer, c *api.TlsCert, base string, paths certOutputs) error {
 	if c.CrtPem == "" {

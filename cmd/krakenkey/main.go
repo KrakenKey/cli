@@ -670,13 +670,23 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		fs := flag.NewFlagSet("cert retry", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
 		var (
+			out          string
+			chainOut     string
+			fullchainOut string
 			wait         bool
 			pollInterval = 15 * time.Second
 			pollTimeout  = 10 * time.Minute
 		)
-		fs.BoolVar(&wait, "wait", false, "Wait for issuance to complete")
+		fs.StringVar(&out, "out", "", "Certificate output path, used with --wait (default: ./<cn>.crt)")
+		fs.StringVar(&chainOut, "chain-out", "", "Chain output path, used with --wait (default: ./<cn>.chain.crt)")
+		fs.StringVar(&fullchainOut, "fullchain-out", "", "Full chain output path, used with --wait (default: ./<cn>.fullchain.crt)")
+		fs.BoolVar(&wait, "wait", false, "Wait for issuance to complete and save the certificate")
 		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to poll for status")
 		fs.DurationVar(&pollTimeout, "poll-timeout", pollTimeout, "Maximum time to wait")
+		fs.Usage = func() {
+			fmt.Fprint(os.Stderr, "Usage: krakenkey cert retry <id> [--wait] [flags]\n")
+			fs.PrintDefaults()
+		}
 		if err := fs.Parse(subArgs); err != nil {
 			return err
 		}
@@ -687,7 +697,14 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		if !ok {
 			return &api.ErrConfig{Message: "certificate ID must be an integer"}
 		}
-		return cert.RunRetry(ctx, client, printer, id, wait, pollInterval, pollTimeout)
+		return cert.RunRetry(ctx, client, printer, id, cert.RetryOptions{
+			Out:          out,
+			ChainOut:     chainOut,
+			FullchainOut: fullchainOut,
+			Wait:         wait,
+			PollInterval: pollInterval,
+			PollTimeout:  pollTimeout,
+		})
 
 	case "delete":
 		fs := flag.NewFlagSet("cert delete", flag.ContinueOnError)
@@ -997,7 +1014,7 @@ Subcommands:
   download  Download the certificate PEM
   renew     Trigger manual renewal (--wait saves the renewed cert)
   revoke    Revoke a certificate
-  retry     Retry a failed issuance
+  retry     Retry a failed issuance (--wait saves the cert)
   update    Update certificate settings
   delete    Delete a certificate
 
@@ -1007,6 +1024,7 @@ Examples:
   krakenkey cert list --status issued
   krakenkey cert download 42 --out ./example.crt
   krakenkey cert renew 42 --wait --fullchain-out ./example.fullchain.crt
+  krakenkey cert retry 42 --wait --fullchain-out ./example.fullchain.crt
   krakenkey cert update 42 --auto-renew=true
   krakenkey cert renew 42 --if-due --wait   # for cron/systemd timers
 `

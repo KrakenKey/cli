@@ -361,7 +361,7 @@ func TestRunRetry_Success(t *testing.T) {
 	client := newTestClient(srv.URL)
 	printer, out, _ := newPrinter()
 
-	err := cert.RunRetry(context.Background(), client, printer, 7, false, 0, 0)
+	err := cert.RunRetry(context.Background(), client, printer, 7, cert.RetryOptions{})
 	if err != nil {
 		t.Fatalf("RunRetry: %v", err)
 	}

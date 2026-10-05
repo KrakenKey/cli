@@ -299,27 +299,49 @@ func RunRevoke(ctx context.Context, client *api.Client, printer *output.Printer,
 	return nil
 }
 
-// RunRetry retries a failed certificate issuance.
-func RunRetry(ctx context.Context, client *api.Client, printer *output.Printer, id int, wait bool, pollInterval, pollTimeout time.Duration) error {
+// RetryOptions holds parameters for the `cert retry` command.
+type RetryOptions struct {
+	Out          string // path for certificate PEM, default: ./<cn>.crt
+	ChainOut     string // path for chain PEM, default: ./<cn>.chain.crt
+	FullchainOut string // path for fullchain PEM, default: ./<cn>.fullchain.crt
+	Wait         bool
+	PollInterval time.Duration
+	PollTimeout  time.Duration
+}
+
+// RunRetry retries a failed certificate issuance. With opts.Wait it polls
+// until issuance finishes and saves the certificate, chain and full chain the
+// same way `cert issue --wait` does.
+func RunRetry(ctx context.Context, client *api.Client, printer *output.Printer, id int, opts RetryOptions) error {
 	resp, err := client.RetryCert(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	printer.JSON(resp)
 	printer.Success("Retry triggered for certificate %d (status: %s)", resp.ID, resp.Status)
 
-	if !wait {
+	if !opts.Wait {
+		printer.JSON(resp)
 		return nil
 	}
-	cert, err := PollUntilDone(ctx, client, printer, resp.ID, pollInterval, pollTimeout)
+	cert, err := PollUntilDone(ctx, client, printer, resp.ID, opts.PollInterval, opts.PollTimeout)
 	if err != nil {
 		return err
 	}
 	if cert.Status == api.CertStatusFailed {
 		return failedError(cert, "certificate %d issuance failed after retry", id)
 	}
-	printer.Success("Certificate %d issued", id)
+
+	if err := saveIssuedCert(ctx, client, printer, cert, cnFromCert(cert), certOutputs{
+		Out:          opts.Out,
+		ChainOut:     opts.ChainOut,
+		FullchainOut: opts.FullchainOut,
+	}); err != nil {
+		return err
+	}
+
+	printer.JSON(cert)
+	printer.Success("Certificate %d issued", cert.ID)
 	return nil
 }
 
