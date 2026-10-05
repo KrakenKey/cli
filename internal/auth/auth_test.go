@@ -291,7 +291,7 @@ func TestRunKeysList_ShowsAccessAndLastUse(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		// Raw JSON as the API sends it, including null for unrestricted fields.
-		w.Write([]byte(`[
+		_, _ = w.Write([]byte(`[
 		  {"id":"k1","name":"renewal","createdAt":"2026-10-01T00:00:00Z","expiresAt":null,
 		   "lastUsedAt":"2026-10-05T12:00:00Z","lastUsedIp":"203.0.113.7",
 		   "scopes":["certs:read","certs:renew","account:read"],"allowedDomainIds":["d1"],
