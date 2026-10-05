@@ -9,6 +9,9 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 ### Added
 - `auth keys list` shows each key's access and when it was last used. The new **Access** column reads `full`, a preset name (`read-only`, `cert-renewal`, `probe`) or `custom: <scopes>`, followed by any domain, certificate or IP limits. With `--output json` the list now passes through `lastUsedAt`, `lastUsedIp`, `scopes`, `allowedDomainIds`, `allowedCertIds` and `allowedIps`. Limits are set when a key is created in the dashboard (KrakenKey/app#122). Older APIs return none of these fields, and those keys show as `full`.
 
+### Fixed
+- `--help` on any subcommand now prints its usage and exits 0. Before, it also printed `Error: pflag: help requested` and exited 1, and commands with no flags of their own (`auth status`, `auth logout`, `auth keys list`, `domain list`, `account show`, `account plan`, `endpoint list`, `endpoint probes`) ignored `--help` and called the API. Those commands now reject unknown flags with an error instead of ignoring them. (#52)
+
 ---
 
 ## [v0.7.1] — 2026-10-05

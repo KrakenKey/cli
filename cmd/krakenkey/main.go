@@ -126,7 +126,9 @@ func run() int {
 
 // exitCode prints the error and returns the appropriate exit code.
 func exitCode(printer *output.Printer, err error) int {
-	if err == nil {
+	// A subcommand's --help returns pflag.ErrHelp after printing usage; that
+	// is a successful run, not an error.
+	if err == nil || errors.Is(err, flag.ErrHelp) {
 		return 0
 	}
 	printer.Error("%s", err)
@@ -142,6 +144,16 @@ func exitCode(printer *output.Printer, err error) int {
 	default:
 		return 1
 	}
+}
+
+// parseNoFlags parses the arguments of a subcommand that takes no flags, so
+// --help prints its usage (and exits 0 through exitCode) and an unknown flag
+// is an error instead of being ignored.
+func parseNoFlags(name string, args []string) error {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	fs.Usage = func() { fmt.Fprintf(os.Stderr, "Usage: krakenkey %s\n", name) }
+	return fs.Parse(args)
 }
 
 // requireAPIKey ensures cfg.APIKey is set, returning an ErrConfig if not.
@@ -251,9 +263,15 @@ func runAuth(ctx context.Context, client *api.Client, printer *output.Printer, c
 		return auth.RunLogin(ctx, tempClient, printer, key)
 
 	case "logout":
+		if err := parseNoFlags("auth logout", subArgs); err != nil {
+			return err
+		}
 		return auth.RunLogout(printer)
 
 	case "status":
+		if err := parseNoFlags("auth status", subArgs); err != nil {
+			return err
+		}
 		if err := requireAPIKey(cfg); err != nil {
 			return err
 		}
@@ -278,6 +296,9 @@ func runAuthKeys(ctx context.Context, client *api.Client, printer *output.Printe
 
 	switch sub {
 	case "list":
+		if err := parseNoFlags("auth keys list", subArgs); err != nil {
+			return err
+		}
 		return auth.RunKeysList(ctx, client, printer)
 
 	case "create":
@@ -343,6 +364,9 @@ func runDomain(ctx context.Context, client *api.Client, printer *output.Printer,
 		return domain.RunAdd(ctx, client, printer, fs.Arg(0))
 
 	case "list":
+		if err := parseNoFlags("domain list", subArgs); err != nil {
+			return err
+		}
 		return domain.RunList(ctx, client, printer)
 
 	case "show":
@@ -425,11 +449,18 @@ func runAccount(ctx context.Context, client *api.Client, printer *output.Printer
 	}
 
 	sub := args[0]
+	subArgs := args[1:]
 
 	switch sub {
 	case "show":
+		if err := parseNoFlags("account show", subArgs); err != nil {
+			return err
+		}
 		return account.RunShow(ctx, client, printer)
 	case "plan":
+		if err := parseNoFlags("account plan", subArgs); err != nil {
+			return err
+		}
 		return account.RunPlan(ctx, client, printer)
 	default:
 		return fmt.Errorf("unknown account subcommand %q — run 'krakenkey account --help'", sub)
@@ -790,9 +821,15 @@ func runEndpoint(ctx context.Context, client *api.Client, printer *output.Printe
 		return endpoint.RunAdd(ctx, client, printer, fs.Arg(0), port, sni, label, []string(probes))
 
 	case "probes":
+		if err := parseNoFlags("endpoint probes", subArgs); err != nil {
+			return err
+		}
 		return endpoint.RunListProbes(ctx, client, printer)
 
 	case "list":
+		if err := parseNoFlags("endpoint list", subArgs); err != nil {
+			return err
+		}
 		return endpoint.RunList(ctx, client, printer)
 
 	case "show":
