@@ -391,6 +391,25 @@ The CLI generates CSRs using Go's `crypto` standard library. Supported key types
 
 Private keys are saved locally with `0600` permissions. They are never sent to the API or printed to stdout.
 
+## Troubleshooting
+
+### `ACME challenge delegation missing` / `ACME challenge delegation mismatch`
+
+Before it creates an ACME order, KrakenKey checks the `_acme-challenge` CNAME for every name on the certificate (see [`krakenkey domain`](#krakenkey-domain)). If a record is missing or points somewhere else, the certificate fails before the CA is contacted. `cert issue`, `submit`, `renew` and `retry` with `--wait` exit 1 with the reason, and `cert show <id>` prints it:
+
+```
+Error: certificate issuance failed for example.com: ACME challenge delegation missing: no CNAME found at _acme-challenge.example.com. Create a CNAME record from _acme-challenge.example.com to example-com.acme.krakenkey.io, then request the certificate again (if you just created it, allow a few minutes for DNS to update).
+```
+
+The mismatch variant names the record's current target and the one expected.
+
+KrakenKey does not retry this failure on its own, because only a DNS change can fix it. To recover:
+
+1. Create or fix the record. `krakenkey domain check <name>...` with the certificate's names shows what each `_acme-challenge` record should be and what is still missing, and `--wait` re-checks until everything is in place.
+2. Once `domain check` passes, run `krakenkey cert retry <id> --wait`. The retry reuses the certificate's CSR, so the private key you already have stays valid.
+
+A CNAME chain is fine: KrakenKey follows up to five hops from `_acme-challenge.<name>` looking for the expected target. If you have only just created the record, a resolver that looked it up earlier can keep the "no record" answer until your zone's negative-cache TTL runs out, often a few minutes.
+
 ## Exit codes
 
 | Code | Meaning |
