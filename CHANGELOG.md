@@ -7,6 +7,7 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 ## [Unreleased]
 
 ### Documentation
+- README: the `cert issue`, `cert submit` and Certificate chain tables listed `./<domain>.chain.pem` and `./<domain>.fullchain.pem` as the default chain file names. The CLI has always written `.chain.crt` and `.fullchain.crt`, so the tables now say that, and so does the v0.2.0 entry below. No CLI change. (#49)
 - README: new "Do not rely on AIA chain repair" subsection under Certificate chain. It lists which clients download a missing intermediate from the leaf's AIA `caIssuers` URL and which never do, explains why the full chain is the file to deploy, and shows how to check a server or chain file with `openssl`. CA/Browser Forum ballot SC104 (passed 2026-09-03) makes the AIA extension optional in TLS subscriber certificates, so leaf-only deployments will get less reliable over time. No CLI change.
 - README: new Troubleshooting section for the `ACME challenge delegation missing` and `mismatch` failures. It explains where the reason shows up, that KrakenKey does not retry these on its own, and how to recover with `domain check` and `cert retry`. No CLI change.
 
@@ -82,8 +83,8 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 ## [v0.2.0] — 2026-05-14
 
 ### Added
-- `cert issue` / `cert submit`: `--chain-out` flag (default `./<domain>.chain.pem`) — writes the intermediate CA chain to disk alongside the leaf certificate.
-- `cert issue` / `cert submit`: `--fullchain-out` flag (default `./<domain>.fullchain.pem`) — writes leaf + intermediates.
+- `cert issue` / `cert submit`: `--chain-out` flag (default `./<domain>.chain.crt`) — writes the intermediate CA chain to disk alongside the leaf certificate.
+- `cert issue` / `cert submit`: `--fullchain-out` flag (default `./<domain>.fullchain.crt`) — writes leaf + intermediates.
 - `cert download`: `--format` flag with values `cert` (leaf only, default), `chain` (intermediates only), and `fullchain` (leaf + intermediates).
 - `cert show` now displays per-entry details for each intermediate in the chain (subject, issuer, fingerprint, expiry).
 - **Certificate chain** section in README explaining the three output files and when to use each.
