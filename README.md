@@ -73,6 +73,19 @@ Creating and deleting keys needs a dashboard session. The CLI always calls the A
 | `--name` | Name for the API key (required) |
 | `--expires-at` | Expiry date in ISO 8601 format (optional) |
 
+#### Limited keys
+
+A key created in the dashboard can be limited to scopes (for example read-only or certificate renewal), to specific domains or certificates, and to source IP addresses. The limits are fixed when the key is created. `auth keys list` shows them in the **Access** column:
+
+| Access | Meaning |
+|---|---|
+| `full` | No limits. Every key created before limits existed, and keys from `auth login --web` |
+| `read-only`, `cert-renewal`, `probe` | One of the dashboard presets |
+| `custom: <scopes>` | Any other set of scopes |
+| `(2 domains; 1 cert; IPs ...)` | Domain, certificate or IP limits, after the scopes |
+
+A command outside the key's limits fails with the API's message, for example `This API key needs the certs:revoke scope for this request.` (403), and a certificate or domain outside them is reported as not found. For a renewal job, a `cert-renewal` key limited to the certificate's domain is enough for `cert show`, `cert renew --wait` and `cert download`. With `--output json`, `auth keys list` includes `scopes`, `allowedDomainIds`, `allowedCertIds` and `allowedIps` (`null` when not limited). See the [API reference](https://github.com/KrakenKey/app/blob/main/backend/docs/API_REFERENCE.md#api-key-scopes-and-restrictions) for which commands need which scope.
+
 ### `krakenkey domain`
 
 ```

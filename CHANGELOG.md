@@ -6,6 +6,9 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Added
+- `auth keys list` shows each key's access and when it was last used. The new **Access** column reads `full`, a preset name (`read-only`, `cert-renewal`, `probe`) or `custom: <scopes>`, followed by any domain, certificate or IP limits. With `--output json` the list now passes through `lastUsedAt`, `lastUsedIp`, `scopes`, `allowedDomainIds`, `allowedCertIds` and `allowedIps`. Limits are set when a key is created in the dashboard (KrakenKey/app#122). Older APIs return none of these fields, and those keys show as `full`.
+
 ---
 
 ## [v0.7.1] — 2026-10-05

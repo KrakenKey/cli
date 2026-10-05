@@ -4,6 +4,9 @@ package auth
 import (
 	"context"
 	"fmt"
+	"slices"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/krakenkey/cli/internal/api"
@@ -65,17 +68,69 @@ func RunKeysList(ctx context.Context, client *api.Client, printer *output.Printe
 		return nil
 	}
 
-	headers := []string{"ID", "Name", "Created", "Expires"}
+	headers := []string{"ID", "Name", "Access", "Created", "Expires", "Last used"}
 	rows := make([][]string, len(keys))
 	for i, k := range keys {
 		exp := "never"
 		if k.ExpiresAt != nil {
 			exp = k.ExpiresAt.Format(time.RFC3339)
 		}
-		rows[i] = []string{k.ID, k.Name, k.CreatedAt.Format(time.RFC3339), exp}
+		lastUsed := "never"
+		if k.LastUsedAt != nil {
+			lastUsed = k.LastUsedAt.Format(time.RFC3339)
+		}
+		rows[i] = []string{k.ID, k.Name, KeyAccess(k), k.CreatedAt.Format(time.RFC3339), exp, lastUsed}
 	}
 	printer.Table(headers, rows)
 	return nil
+}
+
+// keyPresets mirrors API_KEY_PRESETS in the app's @krakenkey/shared package.
+var keyPresets = []struct {
+	name   string
+	scopes []string
+}{
+	{"read-only", []string{"account:read", "certs:read", "domains:read", "endpoints:read"}},
+	{"cert-renewal", []string{"account:read", "certs:read", "certs:renew"}},
+	{"probe", []string{"probes:report"}},
+}
+
+// KeyAccess summarises what a key may do: "full", a preset name, or
+// "custom: <scopes>", followed by any domain, certificate or IP limits.
+func KeyAccess(k api.APIKey) string {
+	access := "full"
+	if k.Scopes != nil {
+		sorted := append([]string(nil), k.Scopes...)
+		sort.Strings(sorted)
+		access = "custom: " + strings.Join(sorted, ",")
+		for _, p := range keyPresets {
+			if slices.Equal(sorted, p.scopes) {
+				access = p.name
+				break
+			}
+		}
+	}
+	var limits []string
+	if n := len(k.AllowedDomainIDs); n > 0 {
+		limits = append(limits, plural(n, "domain"))
+	}
+	if n := len(k.AllowedCertIDs); n > 0 {
+		limits = append(limits, plural(n, "cert"))
+	}
+	if len(k.AllowedIPs) > 0 {
+		limits = append(limits, "IPs "+strings.Join(k.AllowedIPs, ","))
+	}
+	if len(limits) > 0 {
+		access += " (" + strings.Join(limits, "; ") + ")"
+	}
+	return access
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return fmt.Sprintf("1 %s", word)
+	}
+	return fmt.Sprintf("%d %ss", n, word)
 }
 
 // RunKeysCreate creates a new API key and prints the key secret (shown once).

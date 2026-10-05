@@ -254,3 +254,63 @@ func TestRunKeysDelete_Success(t *testing.T) {
 func contains(s, substr string) bool {
 	return len(s) > 0 && len(substr) > 0 && bytes.Contains([]byte(s), []byte(substr))
 }
+
+func TestKeyAccess(t *testing.T) {
+	tests := []struct {
+		name string
+		key  api.APIKey
+		want string
+	}{
+		{"full access", api.APIKey{}, "full"},
+		{"preset in any order", api.APIKey{Scopes: []string{"certs:renew", "account:read", "certs:read"}}, "cert-renewal"},
+		{"read-only preset", api.APIKey{Scopes: []string{"certs:read", "domains:read", "endpoints:read", "account:read"}}, "read-only"},
+		{"probe preset", api.APIKey{Scopes: []string{"probes:report"}}, "probe"},
+		{"custom", api.APIKey{Scopes: []string{"domains:write", "certs:read"}}, "custom: certs:read,domains:write"},
+		{"empty scope list is not full", api.APIKey{Scopes: []string{}}, "custom: "},
+		{
+			"limits",
+			api.APIKey{
+				Scopes:           []string{"probes:report"},
+				AllowedDomainIDs: []string{"a", "b"},
+				AllowedCertIDs:   []int{7},
+				AllowedIPs:       []string{"203.0.113.7", "2001:db8::/48"},
+			},
+			"probe (2 domains; 1 cert; IPs 203.0.113.7,2001:db8::/48)",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := auth.KeyAccess(tc.key); got != tc.want {
+				t.Errorf("KeyAccess = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRunKeysList_ShowsAccessAndLastUse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Raw JSON as the API sends it, including null for unrestricted fields.
+		_, _ = w.Write([]byte(`[
+		  {"id":"k1","name":"renewal","createdAt":"2026-10-01T00:00:00Z","expiresAt":null,
+		   "lastUsedAt":"2026-10-05T12:00:00Z","lastUsedIp":"203.0.113.7",
+		   "scopes":["certs:read","certs:renew","account:read"],"allowedDomainIds":["d1"],
+		   "allowedCertIds":null,"allowedIps":null},
+		  {"id":"k2","name":"old","createdAt":"2026-01-01T00:00:00Z","expiresAt":null}
+		]`))
+	}))
+	defer srv.Close()
+
+	client := api.NewClient(srv.URL, "kk_test", "test", "linux", "amd64")
+	out := &bytes.Buffer{}
+	printer := output.NewWithWriters("text", true, out, &bytes.Buffer{})
+
+	if err := auth.RunKeysList(context.Background(), client, printer); err != nil {
+		t.Fatalf("RunKeysList: %v", err)
+	}
+	for _, want := range []string{"Access", "Last used", "cert-renewal (1 domain)", "2026-10-05T12:00:00Z", "full", "never"} {
+		if !contains(out.String(), want) {
+			t.Errorf("output missing %q:\n%s", want, out.String())
+		}
+	}
+}
