@@ -35,6 +35,37 @@ archives:
       - LICENSE
       - README.md
 
+nfpms:
+  - id: krakenkey
+    ids:
+      - krakenkey
+    package_name: krakenkey
+    file_name_template: "krakenkey_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    vendor: KrakenKey
+    homepage: https://krakenkey.io
+    maintainer: KrakenKey <security@krakenkey.io>
+    description: |-
+      Command-line interface for KrakenKey.
+      Manages TLS certificates from the terminal: generates CSRs locally
+      (private keys never leave the machine), submits them to the KrakenKey
+      API, waits for issuance and downloads the issued certificates.
+    license: AGPL-3.0-only
+    section: utils
+    priority: optional
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/krakenkey/LICENSE
+        file_info:
+          mode: 0644
+      - src: README.md
+        dst: /usr/share/doc/krakenkey/README.md
+        file_info:
+          mode: 0644
+
 dockers_v2:
   - images:
       - "ghcr.io/krakenkey/cli"

@@ -8,6 +8,7 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ### Added
 - `auth keys list` shows each key's access and when it was last used. The new **Access** column reads `full`, a preset name (`read-only`, `cert-renewal`, `probe`) or `custom: <scopes>`, followed by any domain, certificate or IP limits. With `--output json` the list now passes through `lastUsedAt`, `lastUsedIp`, `scopes`, `allowedDomainIds`, `allowedCertIds` and `allowedIps`. Limits are set when a key is created in the dashboard (KrakenKey/app#122). Older APIs return none of these fields, and those keys show as `full`.
+- Linux `.deb` and `.rpm` packages for amd64 and arm64 are attached to each release, named like the archives (`krakenkey_<version>_linux_<arch>.deb` / `.rpm`) and listed in `checksums.txt`. They install the binary to `/usr/bin/krakenkey`, so `sudo apt install ./krakenkey_*.deb` or `sudo dnf install ./krakenkey_*.rpm` works without unpacking an archive. Signed apt and dnf repositories are tracked in #46.
 
 ---
 
