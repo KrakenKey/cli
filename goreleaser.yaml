@@ -76,6 +76,34 @@ dockers_v2:
       - "{{ .Major }}"
       - "{{ if not .IsSnapshot }}latest{{ end }}"
 
+homebrew_casks:
+  - name: krakenkey
+    ids: [krakenkey]
+    binaries: [krakenkey]
+    homepage: https://krakenkey.io
+    description: TLS certificates and endpoint monitoring from the terminal
+    license: AGPL-3.0-only
+    # Prereleases (vX.Y.Z-rc.1) don't update the tap.
+    skip_upload: auto
+    repository:
+      owner: KrakenKey
+      name: homebrew-tap
+      branch: main
+      git:
+        url: git@github.com:KrakenKey/homebrew-tap.git
+        private_key: "{{ .Env.HOMEBREW_TAP_DEPLOY_KEY }}"
+    commit_author:
+      name: krakenhavoc
+      email: krakenhavoc@protonmail.com
+    commit_msg_template: "chore: update krakenkey to {{ .Tag }}"
+    hooks:
+      post:
+        # The binary isn't notarized; drop the quarantine flag so macOS runs it.
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/krakenkey"]
+          end
+
 checksum:
   name_template: checksums.txt
 
