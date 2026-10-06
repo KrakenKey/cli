@@ -6,18 +6,20 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+---
+
+## [v0.8.0] — 2026-10-06
+
 ### Added
 - Homebrew install for macOS and Linux: `brew install krakenkey/tap/krakenkey`. Each release updates the cask in [KrakenKey/homebrew-tap](https://github.com/KrakenKey/homebrew-tap); prereleases don't. (#42)
-
-### Documentation
-- README: the binary download example used `releases/latest/download/krakenkey_linux_amd64.tar.gz`, which doesn't exist because archive names include the version. It now sets `VERSION` and downloads the versioned archive.
-
-### Added
 - `auth keys list` shows each key's access and when it was last used. The new **Access** column reads `full`, a preset name (`read-only`, `cert-renewal`, `probe`) or `custom: <scopes>`, followed by any domain, certificate or IP limits. With `--output json` the list now passes through `lastUsedAt`, `lastUsedIp`, `scopes`, `allowedDomainIds`, `allowedCertIds` and `allowedIps`. Limits are set when a key is created in the dashboard (KrakenKey/app#122). Older APIs return none of these fields, and those keys show as `full`.
 - Linux `.deb` and `.rpm` packages for amd64 and arm64 are attached to each release, named like the archives (`krakenkey_<version>_linux_<arch>.deb` / `.rpm`) and listed in `checksums.txt`. They install the binary to `/usr/bin/krakenkey`, so `sudo apt install ./krakenkey_*.deb` or `sudo dnf install ./krakenkey_*.rpm` works without unpacking an archive. Signed apt and dnf repositories are tracked in #46.
 
 ### Fixed
 - `--help` on any subcommand now prints its usage and exits 0. Before, it also printed `Error: pflag: help requested` and exited 1, and commands with no flags of their own (`auth status`, `auth logout`, `auth keys list`, `domain list`, `account show`, `account plan`, `endpoint list`, `endpoint probes`) ignored `--help` and called the API. Those commands now reject unknown flags with an error instead of ignoring them. (#52)
+
+### Documentation
+- README: the binary download example used `releases/latest/download/krakenkey_linux_amd64.tar.gz`, which doesn't exist because archive names include the version. It now sets `VERSION` and downloads the versioned archive.
 
 ---
 
