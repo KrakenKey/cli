@@ -10,13 +10,22 @@ The CLI generates CSRs locally using Go's crypto stdlib (private keys never leav
 
 ## Installation
 
+**Homebrew** (macOS and Linux):
+
+```bash
+brew install krakenkey/tap/krakenkey
+```
+
+Update with `brew upgrade krakenkey`. The cask comes from [KrakenKey/homebrew-tap](https://github.com/KrakenKey/homebrew-tap) and is updated by each release.
+
 **Binary download** (Linux, macOS, Windows):
 
-Download the latest release from [github.com/KrakenKey/cli/releases](https://github.com/KrakenKey/cli/releases).
+Download the latest release from [github.com/KrakenKey/cli/releases](https://github.com/KrakenKey/cli/releases). Archive names include the version, so set it first:
 
 ```bash
 # Linux amd64 example
-curl -Lo krakenkey.tar.gz https://github.com/KrakenKey/cli/releases/latest/download/krakenkey_linux_amd64.tar.gz
+VERSION=0.7.1
+curl -Lo krakenkey.tar.gz "https://github.com/KrakenKey/cli/releases/download/v${VERSION}/krakenkey_${VERSION}_linux_amd64.tar.gz"
 tar -xzf krakenkey.tar.gz
 sudo mv krakenkey /usr/local/bin/
 ```
