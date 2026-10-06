@@ -30,6 +30,20 @@ tar -xzf krakenkey.tar.gz
 sudo mv krakenkey /usr/local/bin/
 ```
 
+**Debian/Ubuntu or RHEL/Fedora package** (amd64 and arm64):
+
+Each release also includes `.deb` and `.rpm` packages that install the binary to `/usr/bin/krakenkey`. Download the one for your architecture from the [releases page](https://github.com/KrakenKey/cli/releases/latest), then:
+
+```bash
+# Debian, Ubuntu
+sudo apt install ./krakenkey_*_linux_amd64.deb
+
+# RHEL, Fedora, Amazon Linux
+sudo dnf install ./krakenkey_*_linux_amd64.rpm
+```
+
+Replace `amd64` with `arm64` on ARM machines. `checksums.txt` in the release covers the packages too. Remove with `sudo apt remove krakenkey` or `sudo dnf remove krakenkey`.
+
 **go install**:
 
 ```bash
