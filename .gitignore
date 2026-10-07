@@ -1,6 +1,6 @@
 # Compiled binaries
-krakenkey
-krakenkey-*
+/krakenkey
+/krakenkey-*
 
 # Go build artifacts
 /dist/
