@@ -538,7 +538,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 			out          string
 			chainOut     string
 			fullchainOut string
-			autoRenew    bool
+			autoRenew    triBoolFlag
 			wait         bool
 			pollInterval = 15 * time.Second
 			pollTimeout  = 10 * time.Minute
@@ -556,7 +556,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		fs.StringVar(&out, "out", "", "Certificate output path (default: ./<domain>.crt)")
 		fs.StringVar(&chainOut, "chain-out", "", "Chain output path (default: ./<domain>.chain.crt)")
 		fs.StringVar(&fullchainOut, "fullchain-out", "", "Full chain output path (default: ./<domain>.fullchain.crt)")
-		fs.BoolVar(&autoRenew, "auto-renew", false, "Enable automatic renewal")
+		fs.Var(&autoRenew, "auto-renew", "Enable or disable automatic renewal (default: on; pass --auto-renew=false to turn it off)")
 		fs.BoolVar(&wait, "wait", false, "Wait for issuance to complete")
 		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to poll for status")
 		fs.DurationVar(&pollTimeout, "poll-timeout", pollTimeout, "Maximum time to wait")
@@ -584,7 +584,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 			Out:          out,
 			ChainOut:     chainOut,
 			FullchainOut: fullchainOut,
-			AutoRenew:    autoRenew,
+			AutoRenew:    autoRenew.val,
 			Wait:         wait,
 			PollInterval: pollInterval,
 			PollTimeout:  pollTimeout,
@@ -598,7 +598,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 			out          string
 			chainOut     string
 			fullchainOut string
-			autoRenew    bool
+			autoRenew    triBoolFlag
 			wait         bool
 			pollInterval = 15 * time.Second
 			pollTimeout  = 10 * time.Minute
@@ -607,7 +607,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		fs.StringVar(&out, "out", "", "Certificate output path (default: ./<cn>.crt)")
 		fs.StringVar(&chainOut, "chain-out", "", "Chain output path (default: ./<cn>.chain.crt)")
 		fs.StringVar(&fullchainOut, "fullchain-out", "", "Full chain output path (default: ./<cn>.fullchain.crt)")
-		fs.BoolVar(&autoRenew, "auto-renew", false, "Enable automatic renewal")
+		fs.Var(&autoRenew, "auto-renew", "Enable or disable automatic renewal (default: on; pass --auto-renew=false to turn it off)")
 		fs.BoolVar(&wait, "wait", false, "Wait for issuance to complete")
 		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to poll for status")
 		fs.DurationVar(&pollTimeout, "poll-timeout", pollTimeout, "Maximum time to wait")
@@ -626,7 +626,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 			Out:          out,
 			ChainOut:     chainOut,
 			FullchainOut: fullchainOut,
-			AutoRenew:    autoRenew,
+			AutoRenew:    autoRenew.val,
 			Wait:         wait,
 			PollInterval: pollInterval,
 			PollTimeout:  pollTimeout,

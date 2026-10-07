@@ -153,7 +153,7 @@ func TestRunIssue_WithAutoRenew(t *testing.T) {
 		KeyOut:    filepath.Join(dir, "test.key"),
 		CSROut:    filepath.Join(dir, "test.csr"),
 		Out:       filepath.Join(dir, "test.crt"),
-		AutoRenew: true,
+		AutoRenew: boolPtr(true),
 		Wait:      false,
 	})
 	if err != nil {
@@ -296,5 +296,114 @@ func TestRunIssue_InvalidKeyType(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for invalid key type")
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
+
+// autoRenewServer records PATCH requests and the JSON body of the last one.
+func autoRenewServer(t *testing.T, patchStatus int) (*httptest.Server, *int, *map[string]any) {
+	t.Helper()
+	patches := 0
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method {
+		case http.MethodPost:
+			json.NewEncoder(w).Encode(api.CertResponse{ID: 10, Status: "pending"})
+		case http.MethodPatch:
+			patches++
+			json.NewDecoder(r.Body).Decode(&body)
+			if patchStatus != http.StatusOK {
+				w.WriteHeader(patchStatus)
+				w.Write([]byte(`{"message":"boom"}`))
+				return
+			}
+			enabled, _ := body["autoRenew"].(bool)
+			json.NewEncoder(w).Encode(api.TlsCert{ID: 10, AutoRenew: enabled})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &patches, &body
+}
+
+func TestAutoRenewOption(t *testing.T) {
+	tests := []struct {
+		name      string
+		autoRenew *bool
+		wantPatch bool
+		want      bool
+	}{
+		{"unset leaves API default", nil, false, false},
+		{"true is sent", boolPtr(true), true, true},
+		{"false is sent", boolPtr(false), true, false},
+	}
+	for _, tt := range tests {
+		t.Run("issue/"+tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			srv, patches, body := autoRenewServer(t, http.StatusOK)
+			printer, _, _ := newPrinter()
+			err := cert.RunIssue(context.Background(), newTestClient(srv.URL), printer, cert.IssueOptions{
+				Domain:    "example.com",
+				KeyOut:    filepath.Join(dir, "test.key"),
+				CSROut:    filepath.Join(dir, "test.csr"),
+				AutoRenew: tt.autoRenew,
+			})
+			if err != nil {
+				t.Fatalf("RunIssue: %v", err)
+			}
+			checkAutoRenewPatch(t, *patches, *body, tt.wantPatch, tt.want)
+		})
+		t.Run("submit/"+tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			csrPath := writeCSRFile(t, dir, "test.csr")
+			srv, patches, body := autoRenewServer(t, http.StatusOK)
+			printer, _, _ := newPrinter()
+			err := cert.RunSubmit(context.Background(), newTestClient(srv.URL), printer, cert.SubmitOptions{
+				CSRPath:   csrPath,
+				AutoRenew: tt.autoRenew,
+			})
+			if err != nil {
+				t.Fatalf("RunSubmit: %v", err)
+			}
+			checkAutoRenewPatch(t, *patches, *body, tt.wantPatch, tt.want)
+		})
+	}
+}
+
+func checkAutoRenewPatch(t *testing.T, patches int, body map[string]any, wantPatch, want bool) {
+	t.Helper()
+	if !wantPatch {
+		if patches != 0 {
+			t.Errorf("PATCH calls = %d, want 0", patches)
+		}
+		return
+	}
+	if patches != 1 {
+		t.Fatalf("PATCH calls = %d, want 1", patches)
+	}
+	if got, ok := body["autoRenew"].(bool); !ok || got != want {
+		t.Errorf("PATCH autoRenew = %v, want %v", body["autoRenew"], want)
+	}
+}
+
+func TestRunIssue_AutoRenewFalseFailureIsVisibleButNotFatal(t *testing.T) {
+	dir := t.TempDir()
+	srv, _, _ := autoRenewServer(t, http.StatusInternalServerError)
+	printer, _, errBuf := newPrinter()
+	err := cert.RunIssue(context.Background(), newTestClient(srv.URL), printer, cert.IssueOptions{
+		Domain:    "example.com",
+		KeyOut:    filepath.Join(dir, "test.key"),
+		CSROut:    filepath.Join(dir, "test.csr"),
+		AutoRenew: boolPtr(false),
+	})
+	if err != nil {
+		t.Fatalf("RunIssue: %v", err)
+	}
+	got := errBuf.String()
+	if !strings.Contains(got, "disable auto-renew") || !strings.Contains(got, "cert update 10 --auto-renew=false") {
+		t.Errorf("stderr missing clear auto-renew failure message:\n%s", got)
 	}
 }

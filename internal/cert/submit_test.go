@@ -162,7 +162,7 @@ func TestRunSubmit_WithAutoRenew(t *testing.T) {
 
 	err := cert.RunSubmit(context.Background(), client, printer, cert.SubmitOptions{
 		CSRPath:   csrPath,
-		AutoRenew: true,
+		AutoRenew: boolPtr(true),
 		Wait:      false,
 	})
 	if err != nil {

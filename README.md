@@ -166,7 +166,7 @@ krakenkey cert delete <id>                          Delete a certificate (failed
 | `--out` | `./<domain>.crt` | Leaf certificate output path |
 | `--chain-out` | `./<domain>.chain.crt` | Intermediate CA chain output path |
 | `--fullchain-out` | `./<domain>.fullchain.crt` | Full chain output path (leaf + intermediates) |
-| `--auto-renew` | `false` | Enable automatic renewal |
+| `--auto-renew` | `true` (API default) | Set `--auto-renew=false` to turn automatic renewal off for this certificate |
 | `--wait` | `false` | Wait for issuance to complete |
 | `--poll-interval` | `15s` | How often to poll for status |
 | `--poll-timeout` | `10m` | Maximum time to wait |
@@ -179,7 +179,7 @@ krakenkey cert delete <id>                          Delete a certificate (failed
 | `--out` | `./<cn>.crt` | Leaf certificate output path |
 | `--chain-out` | `./<cn>.chain.crt` | Intermediate CA chain output path |
 | `--fullchain-out` | `./<cn>.fullchain.crt` | Full chain output path (leaf + intermediates) |
-| `--auto-renew` | `false` | Enable automatic renewal |
+| `--auto-renew` | `true` (API default) | Set `--auto-renew=false` to turn automatic renewal off for this certificate |
 | `--wait` | `false` | Wait for issuance to complete |
 | `--poll-interval` | `15s` | How often to poll for status |
 | `--poll-timeout` | `10m` | Maximum time to wait |
