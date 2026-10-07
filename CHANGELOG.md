@@ -6,6 +6,10 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+---
+
+## [v0.8.1] — 2026-10-07
+
 ### Fixed
 - `cert issue --auto-renew=false` and `cert submit --auto-renew=false` now turn auto-renewal off. Before, the flag was a plain boolean that only did anything when true, so `false` was ignored and the API default (on) applied. The flag now has three states: not given leaves the API default (on), `--auto-renew=true` sets it on explicitly, and `--auto-renew=false` sends an update after the CSR is submitted. A bare `--auto-renew` still means true, so existing scripts and the GitHub Action keep working; give false as `--auto-renew=false` (a space-separated `false` is not read as the value). If that update fails, the error is printed with the command to retry and the command still succeeds, since the certificate request was accepted. The help text now says the default is on. (#60)
 
