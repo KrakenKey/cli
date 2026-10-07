@@ -316,7 +316,7 @@ func autoRenewServer(t *testing.T, patchStatus int) (*httptest.Server, *int, *ma
 			json.NewDecoder(r.Body).Decode(&body)
 			if patchStatus != http.StatusOK {
 				w.WriteHeader(patchStatus)
-				w.Write([]byte(`{"message":"boom"}`))
+				_, _ = w.Write([]byte(`{"message":"boom"}`))
 				return
 			}
 			enabled, _ := body["autoRenew"].(bool)
