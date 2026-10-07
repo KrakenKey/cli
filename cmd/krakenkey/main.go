@@ -202,6 +202,14 @@ func (f *triBoolFlag) Set(s string) error {
 func (f *triBoolFlag) IsBoolFlag() bool { return true }
 func (f *triBoolFlag) Type() string     { return "bool" }
 
+// addTriBoolFlag registers f on fs. pflag ignores IsBoolFlag, so NoOptDefVal
+// is what makes a bare --name mean true; the value must be given as
+// --name=false (a separate argument is not consumed).
+func addTriBoolFlag(fs *flag.FlagSet, f *triBoolFlag, name, usage string) {
+	fs.Var(f, name, usage)
+	fs.Lookup(name).NoOptDefVal = "true"
+}
+
 // ── auth ─────────────────────────────────────────────────────────────────────
 
 func runAuth(ctx context.Context, client *api.Client, printer *output.Printer, cfg *config.Config, args []string) error {
@@ -538,7 +546,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 			out          string
 			chainOut     string
 			fullchainOut string
-			autoRenew    bool
+			autoRenew    triBoolFlag
 			wait         bool
 			pollInterval = 15 * time.Second
 			pollTimeout  = 10 * time.Minute
@@ -556,7 +564,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		fs.StringVar(&out, "out", "", "Certificate output path (default: ./<domain>.crt)")
 		fs.StringVar(&chainOut, "chain-out", "", "Chain output path (default: ./<domain>.chain.crt)")
 		fs.StringVar(&fullchainOut, "fullchain-out", "", "Full chain output path (default: ./<domain>.fullchain.crt)")
-		fs.BoolVar(&autoRenew, "auto-renew", false, "Enable automatic renewal")
+		addTriBoolFlag(fs, &autoRenew, "auto-renew", "Enable or disable automatic renewal (default: on; use --auto-renew=false to turn it off)")
 		fs.BoolVar(&wait, "wait", false, "Wait for issuance to complete")
 		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to poll for status")
 		fs.DurationVar(&pollTimeout, "poll-timeout", pollTimeout, "Maximum time to wait")
@@ -584,7 +592,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 			Out:          out,
 			ChainOut:     chainOut,
 			FullchainOut: fullchainOut,
-			AutoRenew:    autoRenew,
+			AutoRenew:    autoRenew.val,
 			Wait:         wait,
 			PollInterval: pollInterval,
 			PollTimeout:  pollTimeout,
@@ -598,7 +606,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 			out          string
 			chainOut     string
 			fullchainOut string
-			autoRenew    bool
+			autoRenew    triBoolFlag
 			wait         bool
 			pollInterval = 15 * time.Second
 			pollTimeout  = 10 * time.Minute
@@ -607,7 +615,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		fs.StringVar(&out, "out", "", "Certificate output path (default: ./<cn>.crt)")
 		fs.StringVar(&chainOut, "chain-out", "", "Chain output path (default: ./<cn>.chain.crt)")
 		fs.StringVar(&fullchainOut, "fullchain-out", "", "Full chain output path (default: ./<cn>.fullchain.crt)")
-		fs.BoolVar(&autoRenew, "auto-renew", false, "Enable automatic renewal")
+		addTriBoolFlag(fs, &autoRenew, "auto-renew", "Enable or disable automatic renewal (default: on; use --auto-renew=false to turn it off)")
 		fs.BoolVar(&wait, "wait", false, "Wait for issuance to complete")
 		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to poll for status")
 		fs.DurationVar(&pollTimeout, "poll-timeout", pollTimeout, "Maximum time to wait")
@@ -626,7 +634,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 			Out:          out,
 			ChainOut:     chainOut,
 			FullchainOut: fullchainOut,
-			AutoRenew:    autoRenew,
+			AutoRenew:    autoRenew.val,
 			Wait:         wait,
 			PollInterval: pollInterval,
 			PollTimeout:  pollTimeout,
@@ -756,7 +764,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		fs := flag.NewFlagSet("cert update", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
 		var autoRenewFlag triBoolFlag
-		fs.Var(&autoRenewFlag, "auto-renew", "Enable or disable auto-renewal (true/false)")
+		addTriBoolFlag(fs, &autoRenewFlag, "auto-renew", "Enable or disable auto-renewal (use --auto-renew=true or --auto-renew=false)")
 		fs.Usage = func() {
 			fmt.Fprint(os.Stderr, "Usage: krakenkey cert update <id> [--auto-renew=true|false]\n")
 		}

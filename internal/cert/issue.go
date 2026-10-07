@@ -26,7 +26,7 @@ type IssueOptions struct {
 	Out          string // path for certificate PEM, default: ./<domain>.crt
 	ChainOut     string // path for chain PEM, default: ./<domain>.chain.crt
 	FullchainOut string // path for fullchain PEM, default: ./<domain>.fullchain.crt
-	AutoRenew    bool
+	AutoRenew    *bool  // nil leaves the API default (on); true/false are sent explicitly
 	Wait         bool
 	PollInterval time.Duration
 	PollTimeout  time.Duration
@@ -82,13 +82,7 @@ func RunIssue(ctx context.Context, client *api.Client, printer *output.Printer, 
 	}
 	printer.Info("Certificate request submitted (ID: %d, status: %s)", resp.ID, resp.Status)
 
-	// Set auto-renew if requested.
-	if opts.AutoRenew {
-		t := true
-		if _, err := client.UpdateCert(ctx, resp.ID, &t); err != nil {
-			printer.Error("Failed to enable auto-renew: %s", err)
-		}
-	}
+	applyAutoRenew(ctx, client, printer, resp.ID, opts.AutoRenew)
 
 	if !opts.Wait {
 		printer.JSON(resp)

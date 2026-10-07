@@ -53,3 +53,21 @@ func saveIssuedCert(ctx context.Context, client *api.Client, printer *output.Pri
 		FullchainRequested: paths.FullchainOut != "",
 	})
 }
+
+// applyAutoRenew sets the auto-renew preference on a newly submitted
+// certificate. A nil value leaves the API default (on) untouched and makes no
+// request. A failure is reported on stderr but is not fatal: the certificate
+// request itself already succeeded, and the setting can be changed afterwards
+// with `krakenkey cert update`.
+func applyAutoRenew(ctx context.Context, client *api.Client, printer *output.Printer, id int, autoRenew *bool) {
+	if autoRenew == nil {
+		return
+	}
+	if _, err := client.UpdateCert(ctx, id, autoRenew); err != nil {
+		verb, state := "enable", "true"
+		if !*autoRenew {
+			verb, state = "disable", "false"
+		}
+		printer.Error("Failed to %s auto-renew for certificate %d: %s (the certificate keeps the API default; run `krakenkey cert update %d --auto-renew=%s` to retry)", verb, id, err, id, state)
+	}
+}
