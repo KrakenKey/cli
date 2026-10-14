@@ -6,11 +6,15 @@ Notable changes to the KrakenKey CLI. Format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+---
+
+## [v0.8.2] — 2026-10-14
+
 ### Fixed
-- `cert renew --wait` and `cert retry --wait` now fail when the renewal they waited for failed but KrakenKey kept the current certificate. Newer APIs (KrakenKey/app#201) leave a still-valid certificate `issued` after a failed renewal, with the old PEM, `renewalFailedAt` and `failureReason`, instead of moving it to `failed`. The CLI read that as success: it printed "renewed", saved the old certificate again and exited 0. It now treats `issued` with a `renewalFailedAt` at or after the request (by the API's `Date` header, allowing two minutes of clock difference) as a failed renewal: nothing is written, and it exits 1 with `renewal failed for certificate <id>: <reason>; the current certificate is still in place (expires <date>)`. APIs that don't send `renewalFailedAt` behave as before. `cert show` prints the failed renewal and its reason.
-- `cert renew --if-due` handles the `in_progress` skip, sent when a renewal is already running or waiting for a free slot. It printed "is not due for renewal" and stopped; it now prints `A renewal of certificate <id> is already running` (or `already waiting for a free slot`) and doesn't start another. With `--wait` it waits for that renewal like one it started, honoring `--poll-timeout`, then saves the certificate or reports the failure. Both skips still exit 0. With `--output json` the skip response passes through `reason` and `queued`; after waiting, the certificate is printed. (#64)
-- `cert renew --if-due` says when it tries again after a failed renewal: the API skips as `not_due` for about a day and sends `retryAfter`, which the note now includes (and `--output json` passes through).
-- `cert retry` describes that it also renews again a certificate whose last renewal failed; its `--output json` passes through `queued` for that case.
+- `cert renew --wait` and `cert retry --wait` now fail when the renewal they waited for failed but KrakenKey kept the current certificate. Newer APIs (KrakenKey/app#201) leave a still-valid certificate `issued` after a failed renewal, with the old PEM, `renewalFailedAt` and `failureReason`, instead of moving it to `failed`. The CLI read that as success: it printed "renewed", saved the old certificate again and exited 0. It now treats `issued` with a `renewalFailedAt` at or after the request (by the API's `Date` header, allowing two minutes of clock difference) as a failed renewal: nothing is written, and it exits 1 with `renewal failed for certificate <id>: <reason>; the current certificate is still in place (expires <date>)`. APIs that don't send `renewalFailedAt` behave as before. `cert show` prints the failed renewal and its reason. (#65)
+- `cert renew --if-due` handles the `in_progress` skip, sent when a renewal is already running or waiting for a free slot. It printed "is not due for renewal" and stopped; it now prints `A renewal of certificate <id> is already running` (or `already waiting for a free slot`) and doesn't start another. With `--wait` it waits for that renewal like one it started, honoring `--poll-timeout`, then saves the certificate or reports the failure. Both skips still exit 0. With `--output json` the skip response passes through `reason` and `queued`; after waiting, the certificate is printed. (#64, #65)
+- `cert renew --if-due` says when it tries again after a failed renewal: the API skips as `not_due` until its retry time and sends `retryAfter`, which the note now includes (and `--output json` passes through). (#65)
+- `cert retry` describes that it also renews again a certificate whose last renewal failed; its `--output json` passes through `queued` for that case. (#65)
 
 ---
 
