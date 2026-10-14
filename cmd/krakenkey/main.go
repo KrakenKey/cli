@@ -652,7 +652,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 			pollInterval = 15 * time.Second
 			pollTimeout  = 10 * time.Minute
 		)
-		fs.BoolVar(&ifDue, "if-due", false, "Only renew if the certificate is inside the plan's renewal window; otherwise exit 0 (safe for cron/systemd timers)")
+		fs.BoolVar(&ifDue, "if-due", false, "Only renew if the certificate is inside the plan's renewal window and not already renewing; otherwise exit 0 (safe for cron/systemd timers). With --wait, a renewal already running is waited for")
 		fs.StringVar(&out, "out", "", "Certificate output path, used with --wait (default: ./<cn>.crt)")
 		fs.StringVar(&chainOut, "chain-out", "", "Chain output path, used with --wait (default: ./<cn>.chain.crt)")
 		fs.StringVar(&fullchainOut, "fullchain-out", "", "Full chain output path, used with --wait (default: ./<cn>.fullchain.crt)")
@@ -719,7 +719,7 @@ func runCert(ctx context.Context, client *api.Client, printer *output.Printer, c
 		fs.StringVar(&out, "out", "", "Certificate output path, used with --wait (default: ./<cn>.crt)")
 		fs.StringVar(&chainOut, "chain-out", "", "Chain output path, used with --wait (default: ./<cn>.chain.crt)")
 		fs.StringVar(&fullchainOut, "fullchain-out", "", "Full chain output path, used with --wait (default: ./<cn>.fullchain.crt)")
-		fs.BoolVar(&wait, "wait", false, "Wait for issuance to complete and save the certificate")
+		fs.BoolVar(&wait, "wait", false, "Wait for issuance or renewal to complete and save the certificate")
 		fs.DurationVar(&pollInterval, "poll-interval", pollInterval, "How often to poll for status")
 		fs.DurationVar(&pollTimeout, "poll-timeout", pollTimeout, "Maximum time to wait")
 		fs.Usage = func() {
@@ -1059,7 +1059,7 @@ Subcommands:
   download  Download the certificate PEM
   renew     Trigger manual renewal (--wait saves the renewed cert)
   revoke    Revoke a certificate
-  retry     Retry a failed issuance (--wait saves the cert)
+  retry     Retry a failed issuance or renewal (--wait saves the cert)
   update    Update certificate settings
   delete    Delete a certificate
 

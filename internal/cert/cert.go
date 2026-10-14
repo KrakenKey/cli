@@ -94,7 +94,10 @@ func RunShow(ctx context.Context, client *api.Client, printer *output.Printer, i
 		printer.Println("Renewals:    %d", c.RenewalCount)
 	}
 
-	if c.Status == api.CertStatusFailed && c.FailureReason != "" {
+	if c.Status == api.CertStatusIssued && c.RenewalFailedAt != nil {
+		printer.Println("Renewal:     failed %s, current certificate kept", c.RenewalFailedAt.Format(time.RFC3339))
+	}
+	if (c.Status == api.CertStatusFailed || c.RenewalFailedAt != nil) && c.FailureReason != "" {
 		printer.Println("Reason:      %s", c.FailureReason)
 	}
 
@@ -228,34 +231,48 @@ type RenewOptions struct {
 // RunRenew triggers manual renewal. With opts.Wait it polls until the renewal
 // finishes and saves the renewed certificate, chain and full chain the same
 // way `cert issue --wait` does. With opts.IfDue a certificate outside the
-// renewal window is left alone and nothing is polled or saved.
+// renewal window is left alone and nothing is polled or saved; a certificate
+// that is already renewing is not renewed again, but with opts.Wait the
+// command waits for that renewal like one it started.
 func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, id int, opts RenewOptions) error {
+	sent := time.Now()
 	resp, err := client.RenewCert(ctx, id, opts.IfDue)
 	if err != nil {
 		return err
 	}
+	since := waitReference(resp.ServerTime, sent)
 
 	if resp.WasSkipped() {
-		printer.Info("%s", notDueMessage(resp))
-		printer.JSON(resp)
-		return nil
-	}
-	if opts.IfDue && resp.Skipped == nil {
-		printer.Info("The API did not say whether certificate %d was due (it may not support --if-due yet), so a renewal was started", resp.ID)
+		if resp.Reason != api.RenewSkipInProgress {
+			printer.Info("%s", notDueMessage(resp))
+			printer.JSON(resp)
+			return nil
+		}
+		printer.Info("%s", inProgressMessage(resp, opts.Wait))
+		if !opts.Wait {
+			printer.JSON(resp)
+			return nil
+		}
+	} else {
+		if opts.IfDue && resp.Skipped == nil {
+			printer.Info("The API did not say whether certificate %d was due (it may not support --if-due yet), so a renewal was started", resp.ID)
+		}
+		printer.Success("Renewal triggered for certificate %d (status: %s)", resp.ID, resp.Status)
+		if !opts.Wait {
+			printer.JSON(resp)
+			return nil
+		}
 	}
 
-	printer.Success("Renewal triggered for certificate %d (status: %s)", resp.ID, resp.Status)
-
-	if !opts.Wait {
-		printer.JSON(resp)
-		return nil
-	}
 	cert, err := PollUntilDone(ctx, client, printer, resp.ID, opts.PollInterval, opts.PollTimeout)
 	if err != nil {
 		return err
 	}
 	if cert.Status == api.CertStatusFailed {
 		return failedError(cert, "renewal failed for certificate %d", id)
+	}
+	if renewalFailed(cert, since) {
+		return renewalFailedError(cert, "renewal failed for certificate %d", id)
 	}
 
 	if err := saveIssuedCert(ctx, client, printer, cert, cnFromCert(cert), certOutputs{
@@ -272,7 +289,8 @@ func RunRenew(ctx context.Context, client *api.Client, printer *output.Printer, 
 }
 
 // notDueMessage describes a renewal the API skipped because the certificate
-// is outside the renewal window.
+// is outside the renewal window, or because its last renewal failed recently
+// and automatic renewal has not tried again yet.
 func notDueMessage(r *api.RenewResponse) string {
 	var details []string
 	if r.ExpiresAt != nil {
@@ -285,7 +303,68 @@ func notDueMessage(r *api.RenewResponse) string {
 	if len(details) > 0 {
 		msg += " (" + strings.Join(details, ", ") + ")"
 	}
+	if r.RetryAfter != nil {
+		msg += fmt.Sprintf("; the last renewal failed, and --if-due tries again after %s (renew without --if-due to try now)",
+			r.RetryAfter.UTC().Format("2006-01-02 15:04 MST"))
+	}
 	return msg
+}
+
+// inProgressMessage describes a renewal the API skipped because one is
+// already running or waiting for a free slot.
+func inProgressMessage(r *api.RenewResponse, wait bool) string {
+	msg := fmt.Sprintf("A renewal of certificate %d is already running", r.ID)
+	if r.IsQueued() {
+		msg = fmt.Sprintf("A renewal of certificate %d is already waiting for a free slot", r.ID)
+	}
+	if wait {
+		return msg + "; waiting for it to finish"
+	}
+	return msg + "; not starting another"
+}
+
+// clockSkew is how far renewalFailedAt may lie before the reference time of
+// a renewal and still count as that renewal's failure. The reference is the
+// API's Date header when it sends one, so this covers the header's
+// one-second resolution and clock differences between the API servers and
+// the proxy in front of them; with the local clock it also covers drift.
+const clockSkew = 2 * time.Minute
+
+// waitReference is the time a wait for a renewal starts from: the server's
+// time of the renew or retry response, or the local time the request was
+// sent when the response had no Date header.
+func waitReference(serverTime, sent time.Time) time.Time {
+	if !serverTime.IsZero() {
+		return serverTime
+	}
+	return sent
+}
+
+// renewalFailed reports whether c, polled to a terminal status after a
+// renewal requested (or found running) at since, records that renewal as
+// failed: the API keeps a still-valid certificate issued after a failed
+// renewal and sets renewalFailedAt. The API clears renewalFailedAt when a
+// renewal starts, so a value from before since (less clockSkew) belongs to
+// an earlier renewal. APIs that don't send renewalFailedAt end a failed
+// renewal as failed instead, which callers check first.
+func renewalFailed(c *api.TlsCert, since time.Time) bool {
+	return c.Status == api.CertStatusIssued &&
+		c.RenewalFailedAt != nil &&
+		!c.RenewalFailedAt.Before(since.Add(-clockSkew))
+}
+
+// renewalFailedError builds the error for a renewal that failed while the
+// current certificate stayed issued.
+func renewalFailedError(c *api.TlsCert, format string, args ...any) error {
+	msg := fmt.Sprintf(format, args...)
+	if c.FailureReason != "" {
+		msg += ": " + c.FailureReason
+	}
+	msg += "; the current certificate is still in place"
+	if c.ExpiresAt != nil {
+		msg += " (expires " + c.ExpiresAt.Format("2006-01-02") + ")"
+	}
+	return errors.New(msg)
 }
 
 // RunRevoke revokes a certificate. reason is an RFC 5280 reason code (nil = unspecified).
@@ -309,14 +388,17 @@ type RetryOptions struct {
 	PollTimeout  time.Duration
 }
 
-// RunRetry retries a failed certificate issuance. With opts.Wait it polls
-// until issuance finishes and saves the certificate, chain and full chain the
-// same way `cert issue --wait` does.
+// RunRetry retries a failed certificate issuance, or renews again a
+// certificate whose last renewal failed (it stayed issued). With opts.Wait it
+// polls until issuance finishes and saves the certificate, chain and full
+// chain the same way `cert issue --wait` does.
 func RunRetry(ctx context.Context, client *api.Client, printer *output.Printer, id int, opts RetryOptions) error {
+	sent := time.Now()
 	resp, err := client.RetryCert(ctx, id)
 	if err != nil {
 		return err
 	}
+	since := waitReference(resp.ServerTime, sent)
 
 	printer.Success("Retry triggered for certificate %d (status: %s)", resp.ID, resp.Status)
 
@@ -330,6 +412,9 @@ func RunRetry(ctx context.Context, client *api.Client, printer *output.Printer, 
 	}
 	if cert.Status == api.CertStatusFailed {
 		return failedError(cert, "certificate %d issuance failed after retry", id)
+	}
+	if renewalFailed(cert, since) {
+		return renewalFailedError(cert, "renewal failed again for certificate %d after retry", id)
 	}
 
 	if err := saveIssuedCert(ctx, client, printer, cert, cnFromCert(cert), certOutputs{

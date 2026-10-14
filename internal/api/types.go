@@ -36,8 +36,13 @@ type TlsCert struct {
 	AutoRenew     bool       `json:"autoRenew"`
 	RenewalCount  int        `json:"renewalCount"`
 	FailureReason string     `json:"failureReason,omitempty"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	UserID        string     `json:"userId"`
+	// RenewalFailedAt is set when the last renewal failed while the current
+	// certificate was still valid: the status stays issued, the PEM is the
+	// old one and FailureReason says why. The API clears it when a renewal
+	// is requested again. Older APIs never send it.
+	RenewalFailedAt *time.Time `json:"renewalFailedAt,omitempty"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UserID          string     `json:"userId"`
 }
 
 // ParsedCsr is the server-parsed representation of the submitted CSR.
@@ -105,7 +110,23 @@ type TlsCertChainInfo struct {
 type CertResponse struct {
 	ID     int    `json:"id"`
 	Status string `json:"status"`
+	// Queued is set by retry when it renewed a certificate whose last
+	// renewal failed: true when the renewal waits for a free slot.
+	Queued *bool `json:"queued,omitempty"`
+	// ServerTime is the response's Date header (zero when absent). It is
+	// not part of the JSON body.
+	ServerTime time.Time `json:"-"`
 }
+
+// Reasons the API gives for skipping a renewal requested with ifDue=true.
+const (
+	// RenewSkipNotDue: the certificate is outside the renewal window, or
+	// its last renewal failed recently (RetryAfter is set).
+	RenewSkipNotDue = "not_due"
+	// RenewSkipInProgress: a renewal is already running or waiting for a
+	// free slot (Queued).
+	RenewSkipInProgress = "in_progress"
+)
 
 // RenewResponse is returned by POST /certs/tls/:id/renew. Skipped, Reason,
 // ExpiresAt and RenewalWindowDays are only set by APIs that support the
@@ -117,11 +138,23 @@ type RenewResponse struct {
 	Reason            string     `json:"reason,omitempty"`
 	ExpiresAt         *time.Time `json:"expiresAt,omitempty"`
 	RenewalWindowDays int        `json:"renewalWindowDays,omitempty"`
+	// RetryAfter is set on a not_due skip when the last renewal failed
+	// recently: when ifDue renews again.
+	RetryAfter *time.Time `json:"retryAfter,omitempty"`
+	// Queued is true when the renewal (or, for an in_progress skip, the
+	// renewal already requested) waits for a free slot.
+	Queued *bool `json:"queued,omitempty"`
+	// ServerTime is the response's Date header (zero when absent). It is
+	// not part of the JSON body.
+	ServerTime time.Time `json:"-"`
 }
 
 // WasSkipped reports whether the API skipped the renewal (ifDue=true and the
-// certificate is outside the renewal window).
+// certificate is outside the renewal window or already renewing).
 func (r *RenewResponse) WasSkipped() bool { return r.Skipped != nil && *r.Skipped }
+
+// IsQueued reports whether the API said the renewal waits for a free slot.
+func (r *RenewResponse) IsQueued() bool { return r.Queued != nil && *r.Queued }
 
 // UserProfile is the authenticated user's profile.
 type UserProfile struct {
