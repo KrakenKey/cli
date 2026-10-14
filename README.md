@@ -144,7 +144,7 @@ krakenkey cert download <id> [--out path]           Download certificate PEM
                               [--format cert|chain|fullchain]
 krakenkey cert renew <id> [--if-due] [--wait]       Trigger manual renewal (--if-due: only when due; --wait saves the renewed cert)
 krakenkey cert revoke <id> [--reason N]             Revoke a certificate (RFC 5280 reason code 0–10)
-krakenkey cert retry <id> [--wait]                  Retry failed issuance (--wait saves the issued cert)
+krakenkey cert retry <id> [--wait]                  Retry failed issuance or a failed renewal (--wait saves the issued cert)
 krakenkey cert update <id>                          Update certificate settings
 krakenkey cert delete <id>                          Delete a certificate (failed or revoked only)
 ```
@@ -188,7 +188,7 @@ krakenkey cert delete <id>                          Delete a certificate (failed
 
 | Flag | Default | Description |
 |---|---|---|
-| `--if-due` | `false` | Only renew if the certificate is inside your plan's renewal window; otherwise print a note and exit 0. Use this for scheduled renewals |
+| `--if-due` | `false` | Only renew if the certificate is inside your plan's renewal window and not already renewing; otherwise print a note and exit 0. With `--wait`, a renewal that is already running is waited for. Use this for scheduled renewals |
 | `--out` | `./<cn>.crt` | Leaf certificate output path |
 | `--chain-out` | `./<cn>.chain.crt` | Intermediate CA chain output path |
 | `--fullchain-out` | `./<cn>.fullchain.crt` | Full chain output path (leaf + intermediates) |
@@ -197,6 +197,14 @@ krakenkey cert delete <id>                          Delete a certificate (failed
 | `--poll-timeout` | `10m` | Maximum time to wait |
 
 Renewal reuses the certificate's original CSR, so the existing private key stays valid. With `--wait`, the renewed certificate, chain and full chain are written to the output paths once the renewal finishes, replacing any files already there. With `--if-due`, a certificate outside the renewal window is left alone and nothing is written. Without `--wait`, nothing is written; use `cert download` once the status is back to `issued`.
+
+If the renewal fails, `--wait` writes nothing and exits 1 with the reason. On newer APIs a renewal that fails while the current certificate is still valid leaves that certificate in place: the status goes back to `issued` with the old certificate, and the API records when the renewal failed (`renewalFailedAt`) and why (`failureReason`). The CLI reports that as a failure, not as a renewal:
+
+```
+Error: renewal failed for certificate 42: CAA record for example.com prevents issuance; the current certificate is still in place (expires 2026-11-20)
+```
+
+Fix the cause and run `cert retry <id> --wait` or `cert renew <id> --wait`. `cert show <id>` shows the failed renewal and its reason. Older APIs end a failed renewal as `failed` instead, which the CLI already reports the same way.
 
 `cert retry` flags:
 
@@ -209,7 +217,7 @@ Renewal reuses the certificate's original CSR, so the existing private key stays
 | `--poll-interval` | `15s` | How often to poll for status |
 | `--poll-timeout` | `10m` | Maximum time to wait |
 
-Retry reuses the certificate's CSR, so the private key you already have stays valid. With `--wait`, the certificate, chain and full chain are written to the output paths once issuance finishes. If the retry fails again, nothing is written and the command exits 1 with the reason. Without `--wait`, nothing is written; use `cert download` once the status is `issued`.
+Retry reuses the certificate's CSR, so the private key you already have stays valid. It works on a `failed` certificate and, on newer APIs, on an `issued` certificate whose last renewal failed, which it renews again. With `--wait`, the certificate, chain and full chain are written to the output paths once issuance finishes. If the retry fails again, nothing is written and the command exits 1 with the reason. Without `--wait`, nothing is written; use `cert download` once the status is `issued`.
 
 `cert download` flags:
 
@@ -384,11 +392,25 @@ docker run --rm \
 • Certificate 42 is not due for renewal (expires 2026-12-01, renewal window 30 days)
 ```
 
-With `--output json` it prints the API response instead, e.g. `{"id":42,"status":"issued","skipped":true,"reason":"not_due","expiresAt":"...","renewalWindowDays":30}`; a renewal that went ahead has `"skipped": false`. A skipped renewal never polls, even with `--wait`.
+With `--output json` it prints the API response instead, e.g. `{"id":42,"status":"issued","skipped":true,"reason":"not_due","expiresAt":"...","renewalWindowDays":30}`; a renewal that went ahead has `"skipped": false`. A certificate that is not due is never polled, even with `--wait`.
+
+After a failed renewal, the API keeps skipping `--if-due` runs as `not_due` for about a day, so a timer doesn't place an order on every run. The note then says when it tries again, and the JSON adds `retryAfter`:
+
+```
+• Certificate 42 is not due for renewal (expires 2026-11-20, renewal window 30 days); the last renewal failed, and --if-due tries again after 2026-10-15 02:03 UTC (renew without --if-due to try now)
+```
+
+When a renewal is already running or waiting for a free slot (started by KrakenKey, the dashboard or another job), the API skips with `"reason": "in_progress"` and `"queued"`, and the CLI doesn't start another:
+
+```
+• A renewal of certificate 42 is already running; not starting another
+```
+
+With `--wait` it waits for that renewal instead, honoring `--poll-timeout`, and then saves the certificate or reports the failure the same way as for a renewal it started (with `--output json` it then prints the certificate). Both skips exit 0.
 
 `--if-due` needs an API that supports it. An older API ignores the option and renews anyway; the CLI then prints a note saying the API did not report whether the certificate was due.
 
-Pass explicit output paths: with `--wait`, a renewal that goes ahead writes the new certificate files, and the default `./<cn>.crt` paths depend on the working directory, which differs between cron and systemd. A skipped renewal writes nothing.
+Pass explicit output paths: with `--wait`, a renewal that goes ahead (or one already running) writes the new certificate files, and the default `./<cn>.crt` paths depend on the working directory, which differs between cron and systemd. A skipped renewal writes nothing.
 
 cron (daily at 03:17, in the crontab of a user who has run `krakenkey auth login`):
 
@@ -458,6 +480,19 @@ KrakenKey does not retry this failure on its own, because only a DNS change can 
 2. Once `domain check` passes, run `krakenkey cert retry <id> --wait`. The retry reuses the certificate's CSR, so the private key you already have stays valid, and `--wait` saves the certificate, chain and full chain when issuance finishes (pass `--out`, `--chain-out` or `--fullchain-out` to choose where).
 
 A CNAME chain is fine: KrakenKey follows up to five hops from `_acme-challenge.<name>` looking for the expected target. If you have only just created the record, a resolver that looked it up earlier can keep the "no record" answer until your zone's negative-cache TTL runs out, often a few minutes.
+
+### Renewal failed, current certificate kept
+
+On newer APIs a renewal that fails while the certificate is still valid keeps the current certificate: `cert show <id>` prints
+
+```
+Status:      issued
+...
+Renewal:     failed 2026-10-14T06:03:12Z, current certificate kept
+Reason:      CAA record for example.com prevents issuance
+```
+
+The certificate can still be downloaded and served. KrakenKey tries again on its own after about a day; to try sooner, fix the cause and run `krakenkey cert retry <id> --wait` (or `cert renew <id> --wait`). `cert renew --wait` and `cert retry --wait` exit 1 when the renewal they waited for failed this way.
 
 ## Exit codes
 

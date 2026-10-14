@@ -37,18 +37,25 @@ func NewClient(baseURL, apiKey, version, goos, goarch string) *Client {
 // If out is nil the response body is discarded. A non-2xx status code is
 // decoded as an APIError and mapped to a typed error where appropriate.
 func (c *Client) do(ctx context.Context, method, path string, body any, out any) error {
+	_, err := c.doDated(ctx, method, path, body, out)
+	return err
+}
+
+// doDated is do that also returns the response's Date header, the server's
+// clock at the time of the response (zero when absent or unreadable).
+func (c *Client) doDated(ctx context.Context, method, path string, body any, out any) (time.Time, error) {
 	var reqBody io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
 		if err != nil {
-			return fmt.Errorf("marshal request body: %w", err)
+			return time.Time{}, fmt.Errorf("marshal request body: %w", err)
 		}
 		reqBody = bytes.NewReader(data)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reqBody)
 	if err != nil {
-		return &ErrNetwork{Message: fmt.Sprintf("build request: %s", err)}
+		return time.Time{}, &ErrNetwork{Message: fmt.Sprintf("build request: %s", err)}
 	}
 	if c.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
@@ -60,13 +67,13 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return &ErrNetwork{Message: fmt.Sprintf("request failed: %s", err)}
+		return time.Time{}, &ErrNetwork{Message: fmt.Sprintf("request failed: %s", err)}
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	respData, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &ErrNetwork{Message: fmt.Sprintf("read response body: %s", err)}
+		return time.Time{}, &ErrNetwork{Message: fmt.Sprintf("read response body: %s", err)}
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -77,25 +84,26 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 		apiErr.StatusCode = resp.StatusCode
 		switch resp.StatusCode {
 		case http.StatusUnauthorized:
-			return &ErrAuth{Message: apiErr.Message}
+			return time.Time{}, &ErrAuth{Message: apiErr.Message}
 		case http.StatusNotFound:
-			return &ErrNotFound{Message: apiErr.Message}
+			return time.Time{}, &ErrNotFound{Message: apiErr.Message}
 		case http.StatusTooManyRequests:
-			return &ErrRateLimit{
+			return time.Time{}, &ErrRateLimit{
 				Message:    apiErr.Message,
 				RetryAfter: resp.Header.Get("Retry-After"),
 			}
 		default:
-			return &apiErr
+			return time.Time{}, &apiErr
 		}
 	}
 
+	serverTime, _ := http.ParseTime(resp.Header.Get("Date"))
 	if out != nil && len(respData) > 0 {
 		if err := json.Unmarshal(respData, out); err != nil {
-			return fmt.Errorf("decode response: %w", err)
+			return serverTime, fmt.Errorf("decode response: %w", err)
 		}
 	}
-	return nil
+	return serverTime, nil
 }
 
 // Domain methods
@@ -203,9 +211,11 @@ func (c *Client) RenewCert(ctx context.Context, id int, ifDue bool) (*RenewRespo
 		path += "?ifDue=true"
 	}
 	var rr RenewResponse
-	if err := c.do(ctx, http.MethodPost, path, nil, &rr); err != nil {
+	serverTime, err := c.doDated(ctx, http.MethodPost, path, nil, &rr)
+	if err != nil {
 		return nil, err
 	}
+	rr.ServerTime = serverTime
 	return &rr, nil
 }
 
@@ -221,11 +231,15 @@ func (c *Client) RevokeCert(ctx context.Context, id int, reason *int) (*CertResp
 	return &cr, nil
 }
 
+// RetryCert retries a failed issuance, or renews again a certificate whose
+// last renewal failed (it stays issued with renewalFailedAt set).
 func (c *Client) RetryCert(ctx context.Context, id int) (*CertResponse, error) {
 	var cr CertResponse
-	if err := c.do(ctx, http.MethodPost, "/certs/tls/"+strconv.Itoa(id)+"/retry", nil, &cr); err != nil {
+	serverTime, err := c.doDated(ctx, http.MethodPost, "/certs/tls/"+strconv.Itoa(id)+"/retry", nil, &cr)
+	if err != nil {
 		return nil, err
 	}
+	cr.ServerTime = serverTime
 	return &cr, nil
 }
 
